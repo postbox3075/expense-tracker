@@ -144,6 +144,16 @@
       </div>
     </div>
 
+    <div class="sectiontitle">Household pool</div>
+    <div id="poolStale" class="config-warning" style="display:none;"></div>
+    <div class="statgrid" id="poolGrid">
+      <div class="stat" style="border-color:var(--blue);"><div class="label">Husband Contributed</div><div class="value" id="poolHusband">—</div></div>
+      <div class="stat" style="border-color:var(--gold);"><div class="label">Wife Contributed</div><div class="value" id="poolWife">—</div></div>
+      <div class="stat" style="border-color:#B98CE6;"><div class="label">Total Pool</div><div class="value" id="poolTotal">—</div></div>
+      <div class="stat" id="poolRemainStat" style="border-color:var(--green);"><div class="label">Remaining After Spend</div><div class="value" id="poolRemain">—</div></div>
+    </div>
+
+
     <div class="sectiontitle">By category</div>
     <div id="catList"></div>
 
@@ -163,6 +173,7 @@ const CLIENT_ID = "66b07780-e164-4438-a80f-224ff11391fc";
 const FILE_PATH = "/Family_Expense_Tracker_v15_Fixed.xlsm";
 const CATEGORY_SHEET = "Category Master";
 const EXPENSE_SHEET  = "Expense Log";
+const SUMMARY_SHEET  = "Monthly Summary";
 const CAT_FIRST = 4, CAT_LAST = 43;
 const EXP_FIRST = 5, EXP_LAST = 8004;
 /* ===================================================================== */
@@ -266,12 +277,14 @@ async function loadDashboard(){
     const selMonth = MONTH_NAMES[selMonthIdx];
     const selYear = parseInt(document.getElementById('yearSel').value, 10);
 
-    const [catData, yearData, monthData, catColData, actualData] = await Promise.all([
+    const [catData, yearData, monthData, catColData, actualData, poolYM, poolAmt] = await Promise.all([
       graphFetch(wsRange(CATEGORY_SHEET, `B${CAT_FIRST}:C${CAT_LAST}`)),
       graphFetch(wsRange(EXPENSE_SHEET, `B${EXP_FIRST}:B${EXP_LAST}`)),
       graphFetch(wsRange(EXPENSE_SHEET, `C${EXP_FIRST}:C${EXP_LAST}`)),
       graphFetch(wsRange(EXPENSE_SHEET, `E${EXP_FIRST}:E${EXP_LAST}`)),
       graphFetch(wsRange(EXPENSE_SHEET, `H${EXP_FIRST}:H${EXP_LAST}`)),
+      graphFetch(wsRange(SUMMARY_SHEET, `B3:D3`)),
+      graphFetch(wsRange(SUMMARY_SHEET, `B6:C6`)),
     ]);
 
     // categories: name -> planned
@@ -299,7 +312,15 @@ async function loadDashboard(){
       return { name: c.name, planned: c.planned, actual, saved, over, pct };
     });
 
-    render(rows, selMonth, selYear);
+    const pool = {
+      year: poolYM.values[0][0],
+      month: poolYM.values[0][2],
+      husband: poolAmt.values[0][0] || 0,
+      wife: poolAmt.values[0][1] || 0,
+      matchesSelection: poolYM.values[0][0] === selYear && poolYM.values[0][2] === selMonth
+    };
+
+    render(rows, selMonth, selYear, pool);
     showStatus("", "");
   } catch(e){
     showStatus("Could not load: " + e.message, "err");
@@ -308,7 +329,7 @@ async function loadDashboard(){
   }
 }
 
-function render(rows, monthName, year){
+function render(rows, monthName, year, pool){
   const totalPlanned = rows.reduce((s,r) => s + r.planned, 0);
   const totalActual  = rows.reduce((s,r) => s + r.actual, 0);
   const totalSaved   = rows.reduce((s,r) => s + r.saved, 0);
@@ -333,6 +354,27 @@ function render(rows, monthName, year){
     `You've spent <b>${inr(totalActual)}</b> of <b>${inr(totalPlanned)}</b> planned this month. ` +
     (untouched > 0 ? `<b>${untouched}</b> ${untouched===1?'category hasn\'t':'categories haven\'t'} been touched — that budget rolls up as savings. ` : '') +
     (overCount > 0 ? `<b>${overCount}</b> ${overCount===1?'category is':'categories are'} over budget.` : `Nothing is over budget. 🎉`);
+
+  // Household pool
+  const poolStale = document.getElementById('poolStale');
+  const poolGrid = document.getElementById('poolGrid');
+  if (!pool.matchesSelection){
+    poolStale.style.display = 'block';
+    poolStale.textContent = pool.husband || pool.wife
+      ? `⚠️ The pool figures below are from the last time a contribution was entered (${pool.month} ${pool.year}) — not ${monthName} ${year}. The Contribution tab only remembers the most recent month, so this may not match what's shown here.`
+      : `No contribution has been entered yet for ${monthName} ${year} (or any month).`;
+    poolGrid.style.opacity = '0.55';
+  } else {
+    poolStale.style.display = 'none';
+    poolGrid.style.opacity = '1';
+  }
+  const totalPool = pool.husband + pool.wife;
+  const remaining = totalPool - totalActual;
+  document.getElementById('poolHusband').textContent = inr(pool.husband);
+  document.getElementById('poolWife').textContent = inr(pool.wife);
+  document.getElementById('poolTotal').textContent = inr(totalPool);
+  document.getElementById('poolRemain').textContent = inr(remaining);
+  document.getElementById('poolRemainStat').style.borderColor = remaining < 0 ? 'var(--red)' : 'var(--green)';
 
   const sorted = [...rows].sort((a,b) => b.actual - a.actual || b.planned - a.planned);
   const list = document.getElementById('catList');
