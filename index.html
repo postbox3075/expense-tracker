@@ -81,10 +81,26 @@
     <button class="btn-ms" id="loginBtn">Sign in with Microsoft</button>
   </div>
 
+  <div id="identityOverlay" class="card" style="display:none;">
+    <h2>Who's using this device?</h2>
+    <p style="font-size:14px; color:var(--muted);">Asked once per device — everything you log afterward will default to this person (still changeable per entry, and switchable anytime from the button up top).</p>
+    <div class="radiogroup" style="margin-top:10px;">
+      <label style="padding:16px;"><input type="radio" name="identityPick" value="Husband" /><span style="font-size:16px;">Husband</span></label>
+      <label style="padding:16px;"><input type="radio" name="identityPick" value="Wife" /><span style="font-size:16px;">Wife</span></label>
+    </div>
+    <button id="identityConfirmBtn" class="btn-primary" style="background:var(--blue);">Continue</button>
+  </div>
+
   <div id="appShell">
     <div class="card" style="padding:12px 18px;">
       <button class="signout" id="logoutBtn">Sign out</button>
       <span id="userLabel" style="font-size:13px; color:var(--muted);"></span>
+    </div>
+
+    <div class="card identitybar" style="padding:10px 18px;">
+      <span style="font-size:13px; color:var(--muted);">Using this device as:</span>
+      <b id="identityLabel" style="color:var(--blue-dark);">—</b>
+      <button class="signout" id="switchIdentityBtn" style="margin-left:10px;">Switch</button>
     </div>
 
     <!-- ===================== EXPENSE ===================== -->
@@ -298,6 +314,8 @@ async function init(){
   }
   document.getElementById('loginBtn').addEventListener('click', doLogin);
   document.getElementById('logoutBtn').addEventListener('click', () => msalInstance.logoutPopup());
+  document.getElementById('switchIdentityBtn').addEventListener('click', showIdentityPicker);
+  document.getElementById('identityConfirmBtn').addEventListener('click', confirmIdentityPick);
 
   document.getElementById('e_date').valueAsDate = new Date();
   document.getElementById('e_category').addEventListener('change', onCategoryChange);
@@ -329,9 +347,14 @@ async function doLogin(){
 
 async function onSignedIn(account){
   document.getElementById('signedOutView').style.display = 'none';
-  document.getElementById('appShell').style.display = 'block';
-  document.getElementById('tabbar').style.display = 'flex';
   document.getElementById('userLabel').textContent = account.username;
+
+  const identity = localStorage.getItem('fet_identity');
+  if (!identity){
+    document.getElementById('identityOverlay').style.display = 'block';
+    return; // wait for identity pick before showing the app
+  }
+  showApp(identity);
 
   showStatus("Connecting to your Excel file…", "busy");
   try{
@@ -340,6 +363,41 @@ async function onSignedIn(account){
     showStatus("Connected. Ready.", "ok");
   } catch(e){
     showStatus("Could not connect: " + e.message, "err");
+  }
+}
+
+function showApp(identity){
+  document.getElementById('identityOverlay').style.display = 'none';
+  document.getElementById('appShell').style.display = 'block';
+  document.getElementById('tabbar').style.display = 'flex';
+  document.getElementById('identityLabel').textContent = identity;
+  applyIdentityDefaults(identity);
+}
+
+function applyIdentityDefaults(identity){
+  // Pre-select "who" fields to the device's identity — still changeable per entry.
+  const eSel = document.getElementById('e_paidby');
+  if (eSel) eSel.value = identity;
+  const cRadio = document.querySelector(`input[name=c_who][value="${identity}"]`);
+  if (cRadio) cRadio.checked = true;
+  const sRadio = document.querySelector(`input[name=s_who][value="${identity}"]`);
+  if (sRadio) sRadio.checked = true;
+}
+
+function showIdentityPicker(){
+  document.getElementById('identityOverlay').style.display = 'block';
+}
+
+function confirmIdentityPick(){
+  const picked = document.querySelector('input[name=identityPick]:checked');
+  if (!picked){ alert("Pick Husband or Wife first."); return; }
+  localStorage.setItem('fet_identity', picked.value);
+  showApp(picked.value);
+  // If the app wasn't connected yet (first run), connect now.
+  if (!fileItemId){
+    showStatus("Connecting to your Excel file…", "busy");
+    resolveFile().then(loadCategories).then(() => showStatus("Connected. Ready.", "ok"))
+      .catch(e => showStatus("Could not connect: " + e.message, "err"));
   }
 }
 
