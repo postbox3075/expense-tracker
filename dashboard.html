@@ -55,7 +55,10 @@
   .stat .value{font-size:22px; font-weight:800;}
   .stat .value small{font-size:12px; font-weight:normal; color:var(--muted);}
 
-  .hero{display:flex; gap:20px; align-items:center; background:var(--panel); border-radius:16px; padding:24px; margin-bottom:24px; flex-wrap:wrap;}
+  .hero{display:flex; gap:20px; align-items:center; border-radius:16px; padding:24px; margin-bottom:24px; flex-wrap:wrap; transition:background .4s;}
+  .hero.status-ok{background:linear-gradient(135deg, rgba(61,220,151,.14), var(--panel) 60%); border:1px solid var(--green-dim);}
+  .hero.status-warn{background:linear-gradient(135deg, rgba(245,185,66,.14), var(--panel) 60%); border:1px solid var(--amber-dim);}
+  .hero.status-bad{background:linear-gradient(135deg, rgba(255,107,107,.16), var(--panel) 60%); border:1px solid var(--red-dim);}
   .ringwrap{position:relative; flex:0 0 auto;}
   .ringtext{position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); text-align:center;}
   .ringtext .pct{font-size:30px; font-weight:800;}
@@ -89,6 +92,13 @@
   #status.err{display:block; background:rgba(255,107,107,.12); color:var(--red);}
 
   .config-warning{background:#3A2E10; color:#F5B942; padding:14px; border-radius:10px; font-size:13px; margin-bottom:16px;}
+
+  .pvp{border-radius:14px; padding:16px 18px; margin-bottom:20px; display:flex; align-items:center; gap:14px; flex-wrap:wrap;}
+  .pvp.pvp-ok{background:rgba(61,220,151,.10); border:1px solid var(--green-dim);}
+  .pvp.pvp-bad{background:rgba(255,107,107,.10); border:1px solid var(--red-dim);}
+  .pvp .pvp-badge{font-size:20px; flex:0 0 auto;}
+  .pvp .pvp-text{font-size:14px; line-height:1.5; color:#C7D6EA; flex:1; min-width:200px;}
+  .pvp .pvp-text b{color:var(--ink);}
 </style>
 </head>
 <body>
@@ -121,29 +131,6 @@
       <button class="refreshBtn" id="refreshBtn">↻ Refresh</button>
     </div>
 
-    <div class="statgrid">
-      <div class="stat planned"><div class="label">Total Planned</div><div class="value" id="statPlanned">—</div></div>
-      <div class="stat actual"><div class="label">Total Spent</div><div class="value" id="statActual">—</div></div>
-      <div class="stat saved"><div class="label">Total Saved</div><div class="value" id="statSaved">—</div></div>
-      <div class="stat over"><div class="label">Total Overspent</div><div class="value" id="statOver">—</div></div>
-    </div>
-
-    <div class="hero">
-      <div class="ringwrap">
-        <svg width="140" height="140" viewBox="0 0 140 140">
-          <circle cx="70" cy="70" r="58" fill="none" stroke="#25405F" stroke-width="14"/>
-          <circle id="ringFg" cx="70" cy="70" r="58" fill="none" stroke="#3DDC97" stroke-width="14"
-                  stroke-linecap="round" stroke-dasharray="364" stroke-dashoffset="364"
-                  transform="rotate(-90 70 70)" style="transition:stroke-dashoffset .6s ease, stroke .3s;"/>
-        </svg>
-        <div class="ringtext"><div class="pct" id="ringPct">0%</div><div class="lbl">of budget</div></div>
-      </div>
-      <div class="heroinfo">
-        <h3 id="heroMonth">This month</h3>
-        <p id="heroText">Loading your numbers…</p>
-      </div>
-    </div>
-
     <div class="sectiontitle">Household pool</div>
     <div id="poolStale" class="config-warning" style="display:none;"></div>
     <div class="statgrid" id="poolGrid">
@@ -153,6 +140,31 @@
       <div class="stat" id="poolRemainStat" style="border-color:var(--green);"><div class="label">Remaining After Spend</div><div class="value" id="poolRemain">—</div></div>
     </div>
 
+    <div id="poolVsPlanned" class="pvp"></div>
+
+    <div class="sectiontitle">Category budget</div>
+    <div class="statgrid">
+      <div class="stat planned"><div class="label">Total Planned</div><div class="value" id="statPlanned">—</div></div>
+      <div class="stat actual"><div class="label">Total Spent</div><div class="value" id="statActual">—</div></div>
+      <div class="stat saved"><div class="label">Total Saved</div><div class="value" id="statSaved">—</div></div>
+      <div class="stat over"><div class="label">Total Overspent</div><div class="value" id="statOver">—</div></div>
+    </div>
+
+    <div class="hero" id="heroCard">
+      <div class="ringwrap">
+        <svg width="140" height="140" viewBox="0 0 140 140">
+          <circle cx="70" cy="70" r="58" fill="none" stroke="#25405F" stroke-width="14"/>
+          <circle id="ringFg" cx="70" cy="70" r="58" fill="none" stroke="#3DDC97" stroke-width="14"
+                  stroke-linecap="round" stroke-dasharray="364" stroke-dashoffset="364"
+                  transform="rotate(-90 70 70)" style="transition:stroke-dashoffset .6s ease, stroke .3s;"/>
+        </svg>
+        <div class="ringtext"><div class="pct" id="ringPct">0%</div><div class="lbl" id="ringLbl">of pool spent</div></div>
+      </div>
+      <div class="heroinfo">
+        <h3 id="heroMonth">This month</h3>
+        <p id="heroText">Loading your numbers…</p>
+      </div>
+    </div>
 
     <div class="sectiontitle">By category</div>
     <div id="catList"></div>
@@ -340,26 +352,13 @@ function render(rows, monthName, year, pool){
   const totalActual  = rows.reduce((s,r) => s + r.actual, 0);
   const totalSaved   = rows.reduce((s,r) => s + r.saved, 0);
   const totalOver    = rows.reduce((s,r) => s + r.over, 0);
+  const totalPool    = pool.husband + pool.wife;
+  const remaining    = totalPool - totalActual;
 
   document.getElementById('statPlanned').textContent = inr(totalPlanned);
   document.getElementById('statActual').textContent = inr(totalActual);
   document.getElementById('statSaved').textContent = inr(totalSaved);
   document.getElementById('statOver').textContent = inr(totalOver);
-
-  const usedPct = totalPlanned > 0 ? Math.min(totalActual / totalPlanned, 1) : 0;
-  const circumference = 364;
-  const ring = document.getElementById('ringFg');
-  ring.style.strokeDashoffset = circumference - circumference * usedPct;
-  ring.style.stroke = usedPct >= 1 ? "#FF6B6B" : usedPct >= 0.85 ? "#F5B942" : "#3DDC97";
-  document.getElementById('ringPct').textContent = Math.round(usedPct * 100) + "%";
-
-  document.getElementById('heroMonth').textContent = monthName + " " + year;
-  const untouched = rows.filter(r => r.actual === 0 && r.planned > 0).length;
-  const overCount = rows.filter(r => r.over > 0).length;
-  document.getElementById('heroText').innerHTML =
-    `You've spent <b>${inr(totalActual)}</b> of <b>${inr(totalPlanned)}</b> planned this month. ` +
-    (untouched > 0 ? `<b>${untouched}</b> ${untouched===1?'category hasn\'t':'categories haven\'t'} been touched — that budget rolls up as savings. ` : '') +
-    (overCount > 0 ? `<b>${overCount}</b> ${overCount===1?'category is':'categories are'} over budget.` : `Nothing is over budget. 🎉`);
 
   // Household pool — always accurate for the selected month now (reads Contribution Log directly)
   const poolStale = document.getElementById('poolStale');
@@ -372,13 +371,52 @@ function render(rows, monthName, year, pool){
     poolStale.style.display = 'none';
     poolGrid.style.opacity = '1';
   }
-  const totalPool = pool.husband + pool.wife;
-  const remaining = totalPool - totalActual;
   document.getElementById('poolHusband').textContent = inr(pool.husband);
   document.getElementById('poolWife').textContent = inr(pool.wife);
   document.getElementById('poolTotal').textContent = inr(totalPool);
   document.getElementById('poolRemain').textContent = inr(remaining);
   document.getElementById('poolRemainStat').style.borderColor = remaining < 0 ? 'var(--red)' : 'var(--green)';
+
+  // Planned budget vs contributed pool — is there enough coming in to cover what's planned to go out?
+  const pvp = document.getElementById('poolVsPlanned');
+  const gap = totalPool - totalPlanned;
+  if (totalPool === 0 && totalPlanned === 0){
+    pvp.className = 'pvp'; pvp.innerHTML = '';
+  } else if (gap >= 0){
+    pvp.className = 'pvp pvp-ok';
+    pvp.innerHTML = `<span class="pvp-badge">✅</span><span class="pvp-text">
+      Pool covers the plan: <b>${inr(totalPool)}</b> contributed vs <b>${inr(totalPlanned)}</b> planned —
+      <b>${inr(gap)}</b> more came in than was budgeted.</span>`;
+  } else {
+    pvp.className = 'pvp pvp-bad';
+    pvp.innerHTML = `<span class="pvp-badge">⚠️</span><span class="pvp-text">
+      Shortfall: <b>${inr(totalPlanned)}</b> planned but only <b>${inr(totalPool)}</b> contributed —
+      the pool is short by <b>${inr(-gap)}</b>.</span>`;
+  }
+
+  // Ring now reflects how much of the CONTRIBUTED POOL has been spent (not the category budget)
+  const poolUsedPct = totalPool > 0 ? Math.min(totalActual / totalPool, 1) : (totalActual > 0 ? 1 : 0);
+  const circumference = 364;
+  const ring = document.getElementById('ringFg');
+  ring.style.strokeDashoffset = circumference - circumference * poolUsedPct;
+  const heroCard = document.getElementById('heroCard');
+  let ringColor, status;
+  if (remaining < 0 || totalPool === 0){ ringColor = "#FF6B6B"; status = "status-bad"; }
+  else if (poolUsedPct >= 0.85){ ringColor = "#F5B942"; status = "status-warn"; }
+  else { ringColor = "#3DDC97"; status = "status-ok"; }
+  ring.style.stroke = ringColor;
+  heroCard.className = "hero " + status;
+  document.getElementById('ringPct').textContent = Math.round(poolUsedPct * 100) + "%";
+  document.getElementById('ringLbl').textContent = totalPool > 0 ? "of pool spent" : "no pool set";
+
+  document.getElementById('heroMonth').textContent = monthName + " " + year;
+  const untouched = rows.filter(r => r.actual === 0 && r.planned > 0).length;
+  const overCount = rows.filter(r => r.over > 0).length;
+  document.getElementById('heroText').innerHTML =
+    `Rs ${Math.round(totalActual).toLocaleString('en-IN')} spent from a <b>${inr(totalPool)}</b> pool this month — ` +
+    (remaining >= 0 ? `<b>${inr(remaining)}</b> left. ` : `<b>${inr(-remaining)}</b> over the pool. `) +
+    (untouched > 0 ? `<b>${untouched}</b> ${untouched===1?'category hasn\'t':'categories haven\'t'} been touched. ` : '') +
+    (overCount > 0 ? `<b>${overCount}</b> ${overCount===1?'category is':'categories are'} over its own budget.` : `Nothing is over its own budget. 🎉`);
 
   const sorted = [...rows].sort((a,b) => b.actual - a.actual || b.planned - a.planned);
   const list = document.getElementById('catList');
