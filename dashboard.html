@@ -173,7 +173,8 @@ const CLIENT_ID = "66b07780-e164-4438-a80f-224ff11391fc";
 const FILE_PATH = "/Family_Expense_Tracker_v15_Fixed.xlsm";
 const CATEGORY_SHEET = "Category Master";
 const EXPENSE_SHEET  = "Expense Log";
-const SUMMARY_SHEET  = "Monthly Summary";
+const CONTRIB_SHEET  = "Contribution Log";
+const CONTRIB_FIRST = 4, CONTRIB_LAST = 400;
 const CAT_FIRST = 4, CAT_LAST = 43;
 const EXP_FIRST = 5, EXP_LAST = 8004;
 /* ===================================================================== */
@@ -277,14 +278,16 @@ async function loadDashboard(){
     const selMonth = MONTH_NAMES[selMonthIdx];
     const selYear = parseInt(document.getElementById('yearSel').value, 10);
 
-    const [catData, yearData, monthData, catColData, actualData, poolYM, poolAmt] = await Promise.all([
+    const [catData, yearData, monthData, catColData, actualData, cMonth, cYear, cPerson, cAmount] = await Promise.all([
       graphFetch(wsRange(CATEGORY_SHEET, `B${CAT_FIRST}:C${CAT_LAST}`)),
       graphFetch(wsRange(EXPENSE_SHEET, `B${EXP_FIRST}:B${EXP_LAST}`)),
       graphFetch(wsRange(EXPENSE_SHEET, `C${EXP_FIRST}:C${EXP_LAST}`)),
       graphFetch(wsRange(EXPENSE_SHEET, `E${EXP_FIRST}:E${EXP_LAST}`)),
       graphFetch(wsRange(EXPENSE_SHEET, `H${EXP_FIRST}:H${EXP_LAST}`)),
-      graphFetch(wsRange(SUMMARY_SHEET, `B3:D3`)),
-      graphFetch(wsRange(SUMMARY_SHEET, `B6:C6`)),
+      graphFetch(wsRange(CONTRIB_SHEET, `B${CONTRIB_FIRST}:B${CONTRIB_LAST}`)),
+      graphFetch(wsRange(CONTRIB_SHEET, `C${CONTRIB_FIRST}:C${CONTRIB_LAST}`)),
+      graphFetch(wsRange(CONTRIB_SHEET, `D${CONTRIB_FIRST}:D${CONTRIB_LAST}`)),
+      graphFetch(wsRange(CONTRIB_SHEET, `E${CONTRIB_FIRST}:E${CONTRIB_LAST}`)),
     ]);
 
     // categories: name -> planned
@@ -312,13 +315,16 @@ async function loadDashboard(){
       return { name: c.name, planned: c.planned, actual, saved, over, pct };
     });
 
-    const pool = {
-      year: poolYM.values[0][0],
-      month: poolYM.values[0][2],
-      husband: poolAmt.values[0][0] || 0,
-      wife: poolAmt.values[0][1] || 0,
-      matchesSelection: poolYM.values[0][0] === selYear && poolYM.values[0][2] === selMonth
-    };
+    const pool = { husband: 0, wife: 0 };
+    const cMonths = cMonth.values, cYears = cYear.values, cPersons = cPerson.values, cAmounts = cAmount.values;
+    for (let i = 0; i < cMonths.length; i++){
+      if (cYears[i][0] === selYear && cMonths[i][0] === selMonth){
+        const person = cPersons[i][0];
+        const amt = cAmounts[i][0] || 0;
+        if (person === "Husband") pool.husband += amt;
+        else if (person === "Wife") pool.wife += amt;
+      }
+    }
 
     render(rows, selMonth, selYear, pool);
     showStatus("", "");
@@ -355,14 +361,12 @@ function render(rows, monthName, year, pool){
     (untouched > 0 ? `<b>${untouched}</b> ${untouched===1?'category hasn\'t':'categories haven\'t'} been touched — that budget rolls up as savings. ` : '') +
     (overCount > 0 ? `<b>${overCount}</b> ${overCount===1?'category is':'categories are'} over budget.` : `Nothing is over budget. 🎉`);
 
-  // Household pool
+  // Household pool — always accurate for the selected month now (reads Contribution Log directly)
   const poolStale = document.getElementById('poolStale');
   const poolGrid = document.getElementById('poolGrid');
-  if (!pool.matchesSelection){
+  if (pool.husband === 0 && pool.wife === 0){
     poolStale.style.display = 'block';
-    poolStale.textContent = pool.husband || pool.wife
-      ? `⚠️ The pool figures below are from the last time a contribution was entered (${pool.month} ${pool.year}) — not ${monthName} ${year}. The Contribution tab only remembers the most recent month, so this may not match what's shown here.`
-      : `No contribution has been entered yet for ${monthName} ${year} (or any month).`;
+    poolStale.textContent = `No contribution logged yet for ${monthName} ${year}.`;
     poolGrid.style.opacity = '0.55';
   } else {
     poolStale.style.display = 'none';

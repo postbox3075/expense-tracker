@@ -228,12 +228,14 @@ const CATEGORY_SHEET  = "Category Master";
 const SALARY_SHEET    = "Salary Log";
 const LOAN_SHEET      = "Hand Loan Log";
 const SUMMARY_SHEET   = "Monthly Summary";
+const CONTRIB_SHEET   = "Contribution Log";
 
 const CAT_FIRST = 4, CAT_LAST = 43;          // Category Master data rows
 const CATLOG_FIRST = 47, CATLOG_LAST = 2000; // Category Master change-log rows
 const EXP_FIRST = 5, EXP_LAST = 8004;        // Expense Log data rows
 const SAL_FIRST = 4, SAL_LAST = 400;         // Salary Log data rows
 const LOAN_FIRST = 4, LOAN_LAST = 300;       // Hand Loan Log data rows
+const CONTRIB_FIRST = 4, CONTRIB_LAST = 400; // Contribution Log data rows
 /* ===================================================================== */
 
 const REDIRECT_URI = window.location.href.split('#')[0].split('?')[0];
@@ -443,13 +445,18 @@ async function onContribSubmit(e){
   try{
     const who = document.querySelector('input[name=c_who]:checked').value;
     const amount = parseFloat(document.getElementById('c_amount').value);
+    const notes = document.getElementById('c_notes').value.trim();
     if (isNaN(amount)) throw new Error("Enter a valid amount.");
     const t = todayParts();
 
+    const row = await findNextEmptyRow(CONTRIB_SHEET, 'A', CONTRIB_FIRST, CONTRIB_LAST);
+    await graphFetch(wsRange(CONTRIB_SHEET, `A${row}:F${row}`), { method:"PATCH",
+      body: JSON.stringify({ values: [[t.serial, t.month, t.year, who, amount, notes]] }) });
+
+    // Convenience only: point Monthly Summary's selector at this month so it opens showing it.
+    // (B6/C6 are formulas now, driven by Contribution Log — never written to directly.)
     await graphFetch(wsRange(SUMMARY_SHEET, `B3`), { method:"PATCH", body: JSON.stringify({ values: [[t.year]] }) });
     await graphFetch(wsRange(SUMMARY_SHEET, `D3`), { method:"PATCH", body: JSON.stringify({ values: [[t.month]] }) });
-    const cell = who === "Husband" ? "B6" : "C6";
-    await graphFetch(wsRange(SUMMARY_SHEET, cell), { method:"PATCH", body: JSON.stringify({ values: [[amount]] }) });
 
     showStatus(`${who} contribution of Rs ${amount.toLocaleString('en-IN')} saved ✅`, "ok");
     e.target.reset();
