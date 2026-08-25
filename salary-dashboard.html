@@ -21,6 +21,9 @@
   header .title{font-size:22px; font-weight:800; letter-spacing:-0.02em;}
   header .title span{color:var(--gold);}
   header .sub{color:var(--muted); font-size:13px; margin-top:2px;}
+  .navlinks{display:flex; gap:14px; margin-top:8px;}
+  .navlinks a{color:var(--gold); font-size:13px; font-weight:bold; text-decoration:none; border-bottom:1px solid transparent;}
+  .navlinks a:hover{border-bottom-color:var(--gold);}
   .userbox{font-size:12px; color:var(--muted); text-align:right;}
   .userbox button{background:none; border:none; color:var(--blue); text-decoration:underline; cursor:pointer; font-size:12px; padding:0;}
 
@@ -79,6 +82,10 @@
     <div>
       <div class="title">💵 Salary <span>Split-Up</span></div>
       <div class="sub">What each of you received, and exactly what it went toward</div>
+      <div class="navlinks">
+        <a href="index.html">✏️ Entry Form</a>
+        <a href="dashboard.html">📊 Spend Dashboard</a>
+      </div>
     </div>
     <div class="userbox" id="userbox" style="display:none;">
       <div id="userLabel"></div>
