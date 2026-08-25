@@ -64,7 +64,8 @@
   <div class="tabbar" id="tabbar" style="display:none;">
     <button class="tabbtn active" data-tab="expense">Add Expense</button>
     <button class="tabbtn" data-tab="contrib">Contribution</button>
-    <button class="tabbtn" data-tab="salary">Salary</button>
+    <button class="tabbtn" data-tab="salary">Salary Received</button>
+    <button class="tabbtn" data-tab="salaryspend">Salary Spend</button>
     <button class="tabbtn" data-tab="loan">Hand Loan</button>
     <button class="tabbtn" data-tab="category">Categories</button>
   </div>
@@ -153,7 +154,7 @@
     <!-- ===================== SALARY ===================== -->
     <div class="tabpanel" id="tab-salary">
       <div class="card">
-        <h2>Add Salary Details</h2>
+        <h2>Salary Received</h2>
         <form id="salaryForm">
           <label>Person</label>
           <div class="radiogroup">
@@ -161,19 +162,35 @@
             <label><input type="radio" name="s_who" value="Wife" /><span>Wife</span></label>
           </div>
           <div class="row2">
-            <div><label>Gross Salary (Rs)</label><input type="number" id="s_gross" min="0" step="1" required /></div>
-            <div><label>Savings / Investment</label><input type="number" id="s_savings" min="0" step="1" value="0" /></div>
+            <div><label>Date</label><input type="date" id="s_date" required /></div>
+            <div><label>Amount (Rs)</label><input type="number" id="s_amount" min="0" step="1" required /></div>
           </div>
-          <div class="row2">
-            <div><label>Loan EMI (Rs)</label><input type="number" id="s_emi" min="0" step="1" value="0" /></div>
-            <div><label>Other Deductions</label><input type="number" id="s_ded" min="0" step="1" value="0" /></div>
-          </div>
-          <label>Contribution to Pool (Rs)</label>
-          <input type="number" id="s_contrib" min="0" step="1" value="0" />
-          <p class="planned-hint">Net take-home: <b id="s_netPreview">Rs 0</b></p>
           <label>Notes</label>
           <input type="text" id="s_notes" placeholder="optional" />
-          <button type="submit" class="btn-primary" style="background:var(--orange);">Save Salary</button>
+          <p class="planned-hint">Just the amount received — see the <b>Salary Spend</b> tab to log what it goes toward.</p>
+          <button type="submit" class="btn-primary" style="background:var(--orange);">Save Salary Received</button>
+        </form>
+      </div>
+    </div>
+
+    <div class="tabpanel" id="tab-salaryspend">
+      <div class="card">
+        <h2>Salary Spend</h2>
+        <form id="salarySpendForm">
+          <label>Person</label>
+          <div class="radiogroup">
+            <label><input type="radio" name="ss_who" value="Husband" checked /><span>Husband</span></label>
+            <label><input type="radio" name="ss_who" value="Wife" /><span>Wife</span></label>
+          </div>
+          <div class="row2">
+            <div><label>Date</label><input type="date" id="ss_date" required /></div>
+            <div><label>Amount (Rs)</label><input type="number" id="ss_amount" min="0" step="1" required /></div>
+          </div>
+          <label>What was it for?</label>
+          <input type="text" id="ss_desc" placeholder="e.g. SIP investment, personal loan EMI, shopping" required />
+          <label>Notes</label>
+          <input type="text" id="ss_notes" placeholder="optional" />
+          <button type="submit" class="btn-primary" style="background:#A04000;">Save Spend Entry</button>
         </form>
       </div>
     </div>
@@ -243,7 +260,8 @@ const FILE_PATH = "/Family_Expense_Tracker_v15_Fixed.xlsm";
 
 const EXPENSE_SHEET   = "Expense Log";
 const CATEGORY_SHEET  = "Category Master";
-const SALARY_SHEET    = "Salary Log";
+const SALARY_RECEIVED_SHEET = "Salary Received Log";
+const SALARY_SPEND_SHEET    = "Salary Spend Log";
 const LOAN_SHEET      = "Hand Loan Log";
 const SUMMARY_SHEET   = "Monthly Summary";
 const CONTRIB_SHEET   = "Contribution Log";
@@ -251,7 +269,8 @@ const CONTRIB_SHEET   = "Contribution Log";
 const CAT_FIRST = 4, CAT_LAST = 43;          // Category Master data rows
 const CATLOG_FIRST = 47, CATLOG_LAST = 2000; // Category Master change-log rows
 const EXP_FIRST = 5, EXP_LAST = 8004;        // Expense Log data rows
-const SAL_FIRST = 4, SAL_LAST = 400;         // Salary Log data rows
+const SAL_RECV_FIRST = 4, SAL_RECV_LAST = 400;   // Salary Received Log data rows
+const SAL_SPEND_FIRST = 4, SAL_SPEND_LAST = 2000; // Salary Spend Log data rows (line-item granularity)
 const LOAN_FIRST = 4, LOAN_LAST = 300;       // Hand Loan Log data rows
 const CONTRIB_FIRST = 4, CONTRIB_LAST = 400; // Contribution Log data rows
 /* ===================================================================== */
@@ -322,11 +341,12 @@ async function init(){
   document.getElementById('expenseForm').addEventListener('submit', onExpenseSubmit);
   document.getElementById('contribForm').addEventListener('submit', onContribSubmit);
   document.getElementById('salaryForm').addEventListener('submit', onSalarySubmit);
+  document.getElementById('salarySpendForm').addEventListener('submit', onSalarySpendSubmit);
   document.getElementById('loanForm').addEventListener('submit', onLoanSubmit);
   document.getElementById('catAddForm').addEventListener('submit', onCatAddSubmit);
   document.getElementById('catUpdateForm').addEventListener('submit', onCatUpdateSubmit);
-  ['s_gross','s_savings','s_emi','s_ded'].forEach(id =>
-    document.getElementById(id).addEventListener('input', updateNetPreview));
+  document.getElementById('s_date').valueAsDate = new Date();
+  document.getElementById('ss_date').valueAsDate = new Date();
 
   const t = todayParts();
   document.getElementById('c_date').valueAsDate = t.jsDate;
@@ -382,6 +402,8 @@ function applyIdentityDefaults(identity){
   if (cRadio) cRadio.checked = true;
   const sRadio = document.querySelector(`input[name=s_who][value="${identity}"]`);
   if (sRadio) sRadio.checked = true;
+  const ssRadio = document.querySelector(`input[name=ss_who][value="${identity}"]`);
+  if (ssRadio) ssRadio.checked = true;
 }
 
 function showIdentityPicker(){
@@ -534,40 +556,56 @@ async function onContribSubmit(e){
   finally { btn.disabled = false; }
 }
 
-/* ===================== SALARY ===================== */
-function updateNetPreview(){
-  const g = parseFloat(document.getElementById('s_gross').value) || 0;
-  const s = parseFloat(document.getElementById('s_savings').value) || 0;
-  const em = parseFloat(document.getElementById('s_emi').value) || 0;
-  const d = parseFloat(document.getElementById('s_ded').value) || 0;
-  document.getElementById('s_netPreview').textContent = `Rs ${(g - s - em - d).toLocaleString('en-IN')}`;
-}
+/* ===================== SALARY RECEIVED ===================== */
 async function onSalarySubmit(e){
   e.preventDefault();
   const btn = e.target.querySelector('button');
-  btn.disabled = true; showStatus("Saving salary…", "busy");
+  btn.disabled = true; showStatus("Saving salary received…", "busy");
   try{
     const who = document.querySelector('input[name=s_who]:checked').value;
-    const gross = parseFloat(document.getElementById('s_gross').value);
-    const savings = parseFloat(document.getElementById('s_savings').value) || 0;
-    const emi = parseFloat(document.getElementById('s_emi').value) || 0;
-    const ded = parseFloat(document.getElementById('s_ded').value) || 0;
-    const contrib = parseFloat(document.getElementById('s_contrib').value) || 0;
+    const dateVal = document.getElementById('s_date').valueAsDate;
+    const amount = parseFloat(document.getElementById('s_amount').value);
     const notes = document.getElementById('s_notes').value.trim();
-    if (isNaN(gross)) throw new Error("Enter a valid gross salary.");
-    const t = todayParts();
+    if (!dateVal) throw new Error("Pick a date.");
+    if (isNaN(amount)) throw new Error("Enter a valid amount.");
+    const year = dateVal.getFullYear(), month = MONTH_NAMES[dateVal.getMonth()];
+    const dateSerial = excelSerialDate(dateVal);
 
-    const row = await findNextEmptyRow(SALARY_SHEET, 'A', SAL_FIRST, SAL_LAST);
-    // A Month, B Year, C Person, D Credit Date, E Gross, F Savings, G EMI, H Deductions -- skip I (formula)
-    await graphFetch(wsRange(SALARY_SHEET, `A${row}:H${row}`), { method:"PATCH",
-      body: JSON.stringify({ values: [[t.month, t.year, who, t.serial, gross, savings, emi, ded]] }) });
-    // J Contribution, K Notes
-    await graphFetch(wsRange(SALARY_SHEET, `J${row}:K${row}`), { method:"PATCH",
-      body: JSON.stringify({ values: [[contrib, notes]] }) });
+    const row = await findNextEmptyRow(SALARY_RECEIVED_SHEET, 'A', SAL_RECV_FIRST, SAL_RECV_LAST);
+    await graphFetch(wsRange(SALARY_RECEIVED_SHEET, `A${row}:F${row}`), { method:"PATCH",
+      body: JSON.stringify({ values: [[dateSerial, month, year, who, amount, notes]] }) });
 
-    showStatus(`Salary for ${who} saved to row ${row} ✅`, "ok");
+    showStatus(`${who}'s salary of Rs ${amount.toLocaleString('en-IN')} saved ✅`, "ok");
     e.target.reset();
-    updateNetPreview();
+    document.getElementById('s_date').valueAsDate = new Date();
+  } catch(err){ showStatus("Error: " + err.message, "err"); }
+  finally { btn.disabled = false; }
+}
+
+/* ===================== SALARY SPEND ===================== */
+async function onSalarySpendSubmit(e){
+  e.preventDefault();
+  const btn = e.target.querySelector('button');
+  btn.disabled = true; showStatus("Saving spend entry…", "busy");
+  try{
+    const who = document.querySelector('input[name=ss_who]:checked').value;
+    const dateVal = document.getElementById('ss_date').valueAsDate;
+    const amount = parseFloat(document.getElementById('ss_amount').value);
+    const desc = document.getElementById('ss_desc').value.trim();
+    const notes = document.getElementById('ss_notes').value.trim();
+    if (!dateVal) throw new Error("Pick a date.");
+    if (isNaN(amount)) throw new Error("Enter a valid amount.");
+    if (!desc) throw new Error("Say what it was for.");
+    const year = dateVal.getFullYear(), month = MONTH_NAMES[dateVal.getMonth()];
+    const dateSerial = excelSerialDate(dateVal);
+
+    const row = await findNextEmptyRow(SALARY_SPEND_SHEET, 'A', SAL_SPEND_FIRST, SAL_SPEND_LAST);
+    await graphFetch(wsRange(SALARY_SPEND_SHEET, `A${row}:G${row}`), { method:"PATCH",
+      body: JSON.stringify({ values: [[dateSerial, month, year, who, desc, amount, notes]] }) });
+
+    showStatus(`${who}: ${desc} — Rs ${amount.toLocaleString('en-IN')} saved ✅`, "ok");
+    e.target.reset();
+    document.getElementById('ss_date').valueAsDate = new Date();
   } catch(err){ showStatus("Error: " + err.message, "err"); }
   finally { btn.disabled = false; }
 }

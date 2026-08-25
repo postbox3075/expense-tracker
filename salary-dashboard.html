@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Salary Split-Up — Family Expense Tracker</title>
+<script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3/lib/msal-browser.min.js"></script>
+<style>
+  :root{
+    --navy:#0F1F35; --panel:#182F4D; --panel2:#1E3A5F;
+    --ink:#EAF1FB; --muted:#8CA3C2; --line:#25405F;
+    --green:#3DDC97; --green-dim:#1F7A54;
+    --amber:#F5B942; --red:#FF6B6B; --red-dim:#7A2A2A;
+    --blue:#5AA9E6; --gold:#E8C468; --husband:#5AA9E6; --wife:#E8A0C4;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0; background:var(--navy); color:var(--ink); font-family:'Segoe UI', Arial, Helvetica, sans-serif; -webkit-font-smoothing:antialiased;}
+  .wrap{max-width:960px; margin:0 auto; padding:20px 16px 60px;}
+
+  header{display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px; margin-bottom:20px;}
+  header .title{font-size:22px; font-weight:800; letter-spacing:-0.02em;}
+  header .title span{color:var(--gold);}
+  header .sub{color:var(--muted); font-size:13px; margin-top:2px;}
+  .userbox{font-size:12px; color:var(--muted); text-align:right;}
+  .userbox button{background:none; border:none; color:var(--blue); text-decoration:underline; cursor:pointer; font-size:12px; padding:0;}
+
+  .controls{display:flex; gap:10px; align-items:center; margin-bottom:20px; flex-wrap:wrap;}
+  select, .refreshBtn{background:var(--panel); border:1px solid var(--line); color:var(--ink); border-radius:10px; padding:9px 14px; font-size:14px; font-family:inherit;}
+  .refreshBtn{cursor:pointer; font-weight:bold; color:var(--gold); border-color:var(--gold);}
+  .refreshBtn:disabled{opacity:.5; cursor:default;}
+
+  #signedOutCard{background:var(--panel); border-radius:16px; padding:28px; text-align:center;}
+  #signedOutCard button{margin-top:14px; background:var(--gold); color:#2A2100; border:none; border-radius:10px; padding:12px 22px; font-weight:bold; font-size:14px; cursor:pointer;}
+
+  #dash{display:none;}
+
+  .combo{display:grid; grid-template-columns:repeat(auto-fit, minmax(150px,1fr)); gap:12px; margin-bottom:24px;}
+  .combo .stat{background:var(--panel); border-radius:14px; padding:16px; border-left:4px solid var(--blue);}
+  .combo .stat .label{font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin-bottom:6px;}
+  .combo .stat .value{font-size:22px; font-weight:800;}
+
+  .people{display:grid; grid-template-columns:1fr 1fr; gap:16px;}
+  @media (max-width:700px){ .people{grid-template-columns:1fr;} }
+
+  .personcard{background:var(--panel); border-radius:16px; padding:20px; border-top:4px solid var(--blue);}
+  .personcard.wife{border-top-color:var(--wife);}
+  .personcard h2{margin:0 0 4px; font-size:17px;}
+  .personcard .sub{font-size:12px; color:var(--muted); margin-bottom:16px;}
+
+  .pstat{display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--line); font-size:14px;}
+  .pstat:last-of-type{border-bottom:none;}
+  .pstat .l{color:var(--muted);}
+  .pstat .v{font-weight:bold;}
+  .pstat .v.pos{color:var(--green);}
+  .pstat .v.neg{color:var(--red);}
+
+  .barbg{height:8px; border-radius:5px; background:var(--line); overflow:hidden; margin:14px 0 18px;}
+  .barfill{height:100%; border-radius:5px; transition:width .4s ease;}
+
+  .itemtitle{font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); margin-bottom:8px;}
+  .item{display:flex; gap:10px; padding:9px 0; border-bottom:1px solid var(--line); font-size:13px; align-items:baseline;}
+  .item:last-child{border-bottom:none;}
+  .item .idate{flex:0 0 70px; color:var(--muted); font-size:11.5px;}
+  .item .idesc{flex:1; min-width:0;}
+  .item .idesc .notes{display:block; font-size:11px; color:var(--muted); margin-top:2px;}
+  .item .iamt{flex:0 0 auto; font-weight:bold;}
+  .empty{font-size:13px; color:var(--muted); padding:10px 0;}
+
+  #status{font-size:13px; margin-top:16px; padding:10px 14px; border-radius:10px; display:none;}
+  #status.busy{display:block; background:var(--panel2); color:var(--blue);}
+  #status.err{display:block; background:rgba(255,107,107,.12); color:var(--red);}
+  .config-warning{background:#3A2E10; color:#F5B942; padding:14px; border-radius:10px; font-size:13px; margin-bottom:16px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div>
+      <div class="title">💵 Salary <span>Split-Up</span></div>
+      <div class="sub">What each of you received, and exactly what it went toward</div>
+    </div>
+    <div class="userbox" id="userbox" style="display:none;">
+      <div id="userLabel"></div>
+      <button id="logoutBtn">Sign out</button>
+    </div>
+  </header>
+
+  <div id="configWarning" class="config-warning" style="display:none;">
+    ⚠️ Not configured yet — fill in <code>CLIENT_ID</code> and <code>FILE_PATH</code> near the top of the script.
+  </div>
+
+  <div id="signedOutCard">
+    <div style="font-size:15px; color:var(--muted); margin-bottom:4px;">Sign in to view the salary split-up</div>
+    <button id="loginBtn">Sign in with Microsoft</button>
+  </div>
+
+  <div id="dash">
+    <div class="controls">
+      <select id="monthSel"></select>
+      <select id="yearSel"></select>
+      <button class="refreshBtn" id="refreshBtn">↻ Refresh</button>
+    </div>
+
+    <div class="combo">
+      <div class="stat"><div class="label">Total Received</div><div class="value" id="cReceived">—</div></div>
+      <div class="stat"><div class="label">Total Spent</div><div class="value" id="cSpent">—</div></div>
+      <div class="stat"><div class="label">Combined Remaining</div><div class="value" id="cRemain">—</div></div>
+    </div>
+
+    <div class="people">
+      <div class="personcard husband">
+        <h2>Husband</h2>
+        <div class="sub" id="hMonthLabel">—</div>
+        <div class="pstat"><span class="l">Received</span><span class="v" id="hReceived">Rs 0</span></div>
+        <div class="pstat"><span class="l">Spent</span><span class="v" id="hSpent">Rs 0</span></div>
+        <div class="pstat"><span class="l">Remaining</span><span class="v" id="hRemain">Rs 0</span></div>
+        <div class="barbg"><div class="barfill" id="hBar" style="width:0%; background:var(--husband);"></div></div>
+        <div class="itemtitle">Where it went</div>
+        <div id="hItems"></div>
+      </div>
+
+      <div class="personcard wife">
+        <h2>Wife</h2>
+        <div class="sub" id="wMonthLabel">—</div>
+        <div class="pstat"><span class="l">Received</span><span class="v" id="wReceived">Rs 0</span></div>
+        <div class="pstat"><span class="l">Spent</span><span class="v" id="wSpent">Rs 0</span></div>
+        <div class="pstat"><span class="l">Remaining</span><span class="v" id="wRemain">Rs 0</span></div>
+        <div class="barbg"><div class="barfill" id="wBar" style="width:0%; background:var(--wife);"></div></div>
+        <div class="itemtitle">Where it went</div>
+        <div id="wItems"></div>
+      </div>
+    </div>
+
+    <div id="status"></div>
+  </div>
+
+</div>
+
+<script>
+/* =====================================================================
+   CONFIGURE, THEN COMMIT — same values as index.html / dashboard.html
+   ===================================================================== */
+const CLIENT_ID = "66b07780-e164-4438-a80f-224ff11391fc";
+const FILE_PATH = "/Family_Expense_Tracker_v15_Fixed.xlsm";
+const SALARY_RECEIVED_SHEET = "Salary Received Log";
+const SALARY_SPEND_SHEET    = "Salary Spend Log";
+const SAL_RECV_FIRST = 4, SAL_RECV_LAST = 400;
+const SAL_SPEND_FIRST = 4, SAL_SPEND_LAST = 2000;
+/* ===================================================================== */
+
+const REDIRECT_URI = window.location.href.split('#')[0].split('?')[0];
+const msalConfig = {
+  auth: { clientId: CLIENT_ID, authority: "https://login.microsoftonline.com/consumers", redirectUri: REDIRECT_URI },
+  cache: { cacheLocation: "localStorage" }
+};
+const GRAPH_SCOPES = ["Files.ReadWrite", "User.Read"];
+const GRAPH_BASE = "https://graph.microsoft.com/v1.0";
+const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+
+let msalInstance, fileItemId = null;
+
+function inr(n){ return "Rs " + Math.round(n).toLocaleString('en-IN'); }
+function showStatus(msg, kind){
+  const el = document.getElementById('status');
+  if (!msg){ el.style.display='none'; return; }
+  el.textContent = msg; el.className = kind;
+}
+function serialToDisplayDate(serial){
+  if (!serial && serial !== 0) return '';
+  const DMONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const epoch = Date.UTC(1899, 11, 30);
+  const d = new Date(epoch + serial * 86400000);
+  return `${String(d.getUTCDate()).padStart(2,'0')}-${DMONTHS[d.getUTCMonth()]}`;
+}
+
+async function init(){
+  if (CLIENT_ID.startsWith("PASTE-") || !FILE_PATH){
+    document.getElementById('configWarning').style.display = 'block';
+  }
+  const monthSel = document.getElementById('monthSel');
+  const yearSel = document.getElementById('yearSel');
+  MONTH_NAMES.forEach((m,i) => monthSel.appendChild(new Option(m, i)));
+  const thisYear = new Date().getFullYear();
+  for (let y = thisYear - 2; y <= thisYear + 3; y++) yearSel.appendChild(new Option(y, y));
+  monthSel.value = new Date().getMonth();
+  yearSel.value = thisYear;
+
+  msalInstance = new msal.PublicClientApplication(msalConfig);
+  await msalInstance.initialize();
+  const accounts = msalInstance.getAllAccounts();
+  if (accounts.length > 0){
+    msalInstance.setActiveAccount(accounts[0]);
+    await onSignedIn(accounts[0]);
+  }
+  document.getElementById('loginBtn').addEventListener('click', doLogin);
+  document.getElementById('logoutBtn').addEventListener('click', () => msalInstance.logoutPopup());
+  document.getElementById('refreshBtn').addEventListener('click', loadData);
+  monthSel.addEventListener('change', loadData);
+  yearSel.addEventListener('change', loadData);
+}
+
+async function doLogin(){
+  try{
+    const result = await msalInstance.loginPopup({ scopes: GRAPH_SCOPES });
+    msalInstance.setActiveAccount(result.account);
+    await onSignedIn(result.account);
+  } catch(e){ alert("Sign-in failed: " + e.message); }
+}
+
+async function onSignedIn(account){
+  document.getElementById('signedOutCard').style.display = 'none';
+  document.getElementById('dash').style.display = 'block';
+  document.getElementById('userbox').style.display = 'block';
+  document.getElementById('userLabel').textContent = account.username;
+  await loadData();
+}
+
+async function getToken(){
+  const account = msalInstance.getActiveAccount();
+  try{
+    const result = await msalInstance.acquireTokenSilent({ scopes: GRAPH_SCOPES, account });
+    return result.accessToken;
+  } catch(e){
+    const result = await msalInstance.acquireTokenPopup({ scopes: GRAPH_SCOPES });
+    return result.accessToken;
+  }
+}
+async function graphFetch(path, options = {}){
+  const token = await getToken();
+  const res = await fetch(GRAPH_BASE + path, {
+    ...options,
+    headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json", ...(options.headers || {}) }
+  });
+  if (!res.ok){ const body = await res.text(); throw new Error(`Graph API ${res.status}: ${body.slice(0,200)}`); }
+  return res.status === 204 ? null : res.json();
+}
+function wsRange(sheet, addr){
+  return `/me/drive/items/${fileItemId}/workbook/worksheets('${encodeURIComponent(sheet)}')/range(address='${addr}')`;
+}
+async function resolveFile(){
+  if (fileItemId) return;
+  const encodedPath = FILE_PATH.split('/').map(encodeURIComponent).join('/');
+  const data = await graphFetch(`/me/drive/root:${encodedPath}`);
+  fileItemId = data.id;
+}
+
+async function loadData(){
+  const btn = document.getElementById('refreshBtn');
+  btn.disabled = true;
+  showStatus("Loading…", "busy");
+  try{
+    await resolveFile();
+    const selMonthIdx = parseInt(document.getElementById('monthSel').value, 10);
+    const selMonth = MONTH_NAMES[selMonthIdx];
+    const selYear = parseInt(document.getElementById('yearSel').value, 10);
+
+    const [rDate, rMonth, rYear, rPerson, rAmount, rNotes,
+           sDate, sMonth, sYear, sPerson, sDesc, sAmount, sNotes] = await Promise.all([
+      graphFetch(wsRange(SALARY_RECEIVED_SHEET, `A${SAL_RECV_FIRST}:A${SAL_RECV_LAST}`)),
+      graphFetch(wsRange(SALARY_RECEIVED_SHEET, `B${SAL_RECV_FIRST}:B${SAL_RECV_LAST}`)),
+      graphFetch(wsRange(SALARY_RECEIVED_SHEET, `C${SAL_RECV_FIRST}:C${SAL_RECV_LAST}`)),
+      graphFetch(wsRange(SALARY_RECEIVED_SHEET, `D${SAL_RECV_FIRST}:D${SAL_RECV_LAST}`)),
+      graphFetch(wsRange(SALARY_RECEIVED_SHEET, `E${SAL_RECV_FIRST}:E${SAL_RECV_LAST}`)),
+      graphFetch(wsRange(SALARY_RECEIVED_SHEET, `F${SAL_RECV_FIRST}:F${SAL_RECV_LAST}`)),
+      graphFetch(wsRange(SALARY_SPEND_SHEET, `A${SAL_SPEND_FIRST}:A${SAL_SPEND_LAST}`)),
+      graphFetch(wsRange(SALARY_SPEND_SHEET, `B${SAL_SPEND_FIRST}:B${SAL_SPEND_LAST}`)),
+      graphFetch(wsRange(SALARY_SPEND_SHEET, `C${SAL_SPEND_FIRST}:C${SAL_SPEND_LAST}`)),
+      graphFetch(wsRange(SALARY_SPEND_SHEET, `D${SAL_SPEND_FIRST}:D${SAL_SPEND_LAST}`)),
+      graphFetch(wsRange(SALARY_SPEND_SHEET, `E${SAL_SPEND_FIRST}:E${SAL_SPEND_LAST}`)),
+      graphFetch(wsRange(SALARY_SPEND_SHEET, `F${SAL_SPEND_FIRST}:F${SAL_SPEND_LAST}`)),
+      graphFetch(wsRange(SALARY_SPEND_SHEET, `G${SAL_SPEND_FIRST}:G${SAL_SPEND_LAST}`)),
+    ]);
+
+    const received = { Husband: 0, Wife: 0 };
+    for (let i = 0; i < rYear.values.length; i++){
+      if (rYear.values[i][0] === selYear && rMonth.values[i][0] === selMonth){
+        const p = rPerson.values[i][0];
+        if (p === "Husband" || p === "Wife") received[p] += rAmount.values[i][0] || 0;
+      }
+    }
+
+    const items = { Husband: [], Wife: [] };
+    for (let i = 0; i < sYear.values.length; i++){
+      if (sYear.values[i][0] === selYear && sMonth.values[i][0] === selMonth){
+        const p = sPerson.values[i][0];
+        if (p === "Husband" || p === "Wife"){
+          items[p].push({
+            date: sDate.values[i][0],
+            desc: sDesc.values[i][0] || '(no description)',
+            amount: sAmount.values[i][0] || 0,
+            notes: sNotes.values[i][0] || ''
+          });
+        }
+      }
+    }
+    items.Husband.sort((a,b) => (a.date||0) - (b.date||0));
+    items.Wife.sort((a,b) => (a.date||0) - (b.date||0));
+
+    render(selMonth, selYear, received, items);
+    showStatus("", "");
+  } catch(e){
+    showStatus("Could not load: " + e.message, "err");
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function renderPerson(prefix, monthName, year, receivedAmt, itemList){
+  const spent = itemList.reduce((s,i) => s + i.amount, 0);
+  const remain = receivedAmt - spent;
+  document.getElementById(prefix + 'MonthLabel').textContent = monthName + " " + year;
+  document.getElementById(prefix + 'Received').textContent = inr(receivedAmt);
+  document.getElementById(prefix + 'Spent').textContent = inr(spent);
+  const remainEl = document.getElementById(prefix + 'Remain');
+  remainEl.textContent = inr(remain);
+  remainEl.className = 'v ' + (remain >= 0 ? 'pos' : 'neg');
+  const pct = receivedAmt > 0 ? Math.min(spent / receivedAmt, 1) * 100 : (spent > 0 ? 100 : 0);
+  document.getElementById(prefix + 'Bar').style.width = pct + '%';
+
+  const wrap = document.getElementById(prefix + 'Items');
+  if (itemList.length === 0){
+    wrap.innerHTML = `<div class="empty">Nothing logged for ${monthName} ${year} yet.</div>`;
+    return;
+  }
+  wrap.innerHTML = itemList.map(i => `
+    <div class="item">
+      <span class="idate">${serialToDisplayDate(i.date)}</span>
+      <span class="idesc">${i.desc}${i.notes ? `<span class="notes">${i.notes}</span>` : ''}</span>
+      <span class="iamt">${inr(i.amount)}</span>
+    </div>
+  `).join('');
+}
+
+function render(monthName, year, received, items){
+  const totalReceived = received.Husband + received.Wife;
+  const totalSpent = items.Husband.reduce((s,i)=>s+i.amount,0) + items.Wife.reduce((s,i)=>s+i.amount,0);
+  document.getElementById('cReceived').textContent = inr(totalReceived);
+  document.getElementById('cSpent').textContent = inr(totalSpent);
+  document.getElementById('cRemain').textContent = inr(totalReceived - totalSpent);
+
+  renderPerson('h', monthName, year, received.Husband, items.Husband);
+  renderPerson('w', monthName, year, received.Wife, items.Wife);
+}
+
+init();
+</script>
+</body>
+</html>
