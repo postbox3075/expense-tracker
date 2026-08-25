@@ -122,11 +122,13 @@
             <label><input type="radio" name="c_who" value="Husband" checked /><span>Husband</span></label>
             <label><input type="radio" name="c_who" value="Wife" /><span>Wife</span></label>
           </div>
+          <label>Date</label>
+          <input type="date" id="c_date" required />
           <label>Amount (Rs)</label>
           <input type="number" id="c_amount" min="0" step="1" required />
           <label>Notes</label>
           <input type="text" id="c_notes" placeholder="optional" />
-          <p class="planned-hint">Uses this month (<span id="c_monthLabel"></span>) — updates the pool total on Monthly Summary.</p>
+          <p class="planned-hint">Month: <span id="c_monthLabel"></span> — updates the pool total on Monthly Summary.</p>
           <button type="submit" class="btn-primary" style="background:var(--green);">Save Contribution</button>
         </form>
       </div>
@@ -309,7 +311,12 @@ async function init(){
     document.getElementById(id).addEventListener('input', updateNetPreview));
 
   const t = todayParts();
+  document.getElementById('c_date').valueAsDate = t.jsDate;
   document.getElementById('c_monthLabel').textContent = t.month + " " + t.year;
+  document.getElementById('c_date').addEventListener('change', () => {
+    const d = document.getElementById('c_date').valueAsDate;
+    if (d) document.getElementById('c_monthLabel').textContent = MONTH_NAMES[d.getMonth()] + " " + d.getFullYear();
+  });
 }
 
 async function doLogin(){
@@ -444,22 +451,27 @@ async function onContribSubmit(e){
   btn.disabled = true; showStatus("Saving contribution…", "busy");
   try{
     const who = document.querySelector('input[name=c_who]:checked').value;
+    const dateVal = document.getElementById('c_date').valueAsDate;
     const amount = parseFloat(document.getElementById('c_amount').value);
     const notes = document.getElementById('c_notes').value.trim();
+    if (!dateVal) throw new Error("Pick a date.");
     if (isNaN(amount)) throw new Error("Enter a valid amount.");
-    const t = todayParts();
+    const year = dateVal.getFullYear(), month = MONTH_NAMES[dateVal.getMonth()];
+    const dateSerial = excelSerialDate(dateVal);
 
     const row = await findNextEmptyRow(CONTRIB_SHEET, 'A', CONTRIB_FIRST, CONTRIB_LAST);
     await graphFetch(wsRange(CONTRIB_SHEET, `A${row}:F${row}`), { method:"PATCH",
-      body: JSON.stringify({ values: [[t.serial, t.month, t.year, who, amount, notes]] }) });
+      body: JSON.stringify({ values: [[dateSerial, month, year, who, amount, notes]] }) });
 
-    // Convenience only: point Monthly Summary's selector at this month so it opens showing it.
+    // Convenience only: point Monthly Summary's selector at this entry's month so it opens showing it.
     // (B6/C6 are formulas now, driven by Contribution Log — never written to directly.)
-    await graphFetch(wsRange(SUMMARY_SHEET, `B3`), { method:"PATCH", body: JSON.stringify({ values: [[t.year]] }) });
-    await graphFetch(wsRange(SUMMARY_SHEET, `D3`), { method:"PATCH", body: JSON.stringify({ values: [[t.month]] }) });
+    await graphFetch(wsRange(SUMMARY_SHEET, `B3`), { method:"PATCH", body: JSON.stringify({ values: [[year]] }) });
+    await graphFetch(wsRange(SUMMARY_SHEET, `D3`), { method:"PATCH", body: JSON.stringify({ values: [[month]] }) });
 
-    showStatus(`${who} contribution of Rs ${amount.toLocaleString('en-IN')} saved ✅`, "ok");
+    showStatus(`${who} contribution of Rs ${amount.toLocaleString('en-IN')} saved for ${month} ${year} ✅`, "ok");
     e.target.reset();
+    document.getElementById('c_date').valueAsDate = new Date();
+    document.getElementById('c_monthLabel').textContent = todayParts().month + " " + todayParts().year;
   } catch(err){ showStatus("Error: " + err.message, "err"); }
   finally { btn.disabled = false; }
 }
