@@ -44,6 +44,12 @@
   .radiogroup input:checked + span{font-weight:bold;}
   .radiogroup label:has(input:checked){border-color:var(--blue); background:var(--blue-light); color:var(--blue-dark);}
   .planned-hint{font-size:12px; color:var(--muted); margin-top:4px;}
+  .minilist{max-height:220px; overflow-y:auto; border:1px solid #CBD8E8; border-radius:8px; margin-bottom:16px;}
+  .minilist .mlrow{display:flex; justify-content:space-between; gap:10px; padding:8px 12px; font-size:13px; border-bottom:1px solid #EEF2F8;}
+  .minilist .mlrow:last-child{border-bottom:none;}
+  .minilist .mlrow .mlname{color:var(--ink);}
+  .minilist .mlrow .mlamt{color:var(--muted); white-space:nowrap;}
+  .minilist .mlempty{padding:12px; font-size:13px; color:var(--muted);}
 
   /* Tabs */
   .tabbar{display:flex; overflow-x:auto; gap:6px; padding-bottom:12px; -webkit-overflow-scrolling:touch;}
@@ -188,8 +194,8 @@
             <div><label>Amount (Rs)</label><input type="number" id="ss_amount" min="0" step="1" required /></div>
           </div>
           <label>What was it for?</label>
-          <input type="text" id="ss_desc" list="salaryCatList" placeholder="Start typing — pick a suggestion or type a new one" required />
-          <datalist id="salaryCatList"></datalist>
+          <select id="ss_category" required><option value="">Loading…</option></select>
+          <p class="planned-hint">Not in the list? Add it first in the <b>Salary Categories</b> tab.</p>
           <label>Notes</label>
           <input type="text" id="ss_notes" placeholder="optional" />
           <button type="submit" class="btn-primary" style="background:#A04000;">Save Spend Entry</button>
@@ -222,6 +228,10 @@
     <div class="tabpanel" id="tab-salarycat">
       <div class="card">
         <h2>Manage Salary Categories</h2>
+
+        <p class="planned-hint" style="margin:0 0 6px;">Current categories</p>
+        <div id="salcatListView" class="minilist"></div>
+
         <div class="radiogroup" style="margin-bottom:10px;">
           <label><input type="radio" name="salcatMode" value="add" checked /><span>Add new</span></label>
           <label><input type="radio" name="salcatMode" value="update" /><span>Update amount</span></label>
@@ -259,6 +269,10 @@
     <div class="tabpanel" id="tab-category">
       <div class="card">
         <h2>Manage Categories</h2>
+
+        <p class="planned-hint" style="margin:0 0 6px;">Current categories</p>
+        <div id="catListView" class="minilist"></div>
+
         <div class="radiogroup" style="margin-bottom:10px;">
           <label><input type="radio" name="catMode" value="add" checked /><span>Add new</span></label>
           <label><input type="radio" name="catMode" value="update" /><span>Update amount</span></label>
@@ -527,6 +541,18 @@ async function loadCategories(){
     catSel.appendChild(new Option(name, name));
   });
   onCategoryChange();
+  renderMiniList('catListView', names, categoryPlans);
+}
+function renderMiniList(elId, names, plans){
+  const el = document.getElementById(elId);
+  if (!el) return;
+  if (names.length === 0){
+    el.innerHTML = `<div class="mlempty">Nothing here yet.</div>`;
+    return;
+  }
+  el.innerHTML = names.map(n =>
+    `<div class="mlrow"><span class="mlname">${n}</span><span class="mlamt">Rs ${(plans[n]||0).toLocaleString('en-IN')}</span></div>`
+  ).join('');
 }
 function onCategoryChange(){
   const cat = document.getElementById('e_category').value;
@@ -643,11 +669,11 @@ async function onSalarySpendSubmit(e){
     const who = document.querySelector('input[name=ss_who]:checked').value;
     const dateVal = document.getElementById('ss_date').valueAsDate;
     const amount = parseFloat(document.getElementById('ss_amount').value);
-    const desc = document.getElementById('ss_desc').value.trim();
+    const desc = document.getElementById('ss_category').value;
     const notes = document.getElementById('ss_notes').value.trim();
     if (!dateVal) throw new Error("Pick a date.");
     if (isNaN(amount)) throw new Error("Enter a valid amount.");
-    if (!desc) throw new Error("Say what it was for.");
+    if (!desc) throw new Error("Pick a category — add one first in the Salary Categories tab if it's not listed.");
     const year = dateVal.getFullYear(), month = MONTH_NAMES[dateVal.getMonth()];
     const dateSerial = excelSerialDate(dateVal);
 
@@ -767,17 +793,16 @@ async function loadSalaryCategories(){
     if (name !== "" && name !== null && active !== "No"){ salaryCategoryPlans[name] = amt || 0; names.push(name); }
   });
 
-  const datalist = document.getElementById('salaryCatList');
-  datalist.innerHTML = "";
-  names.forEach(n => datalist.appendChild(new Option(n, n)));
-
+  const catSel = document.getElementById('ss_category');
   const pickSel = document.getElementById('salcat_pick');
   const removeSel = document.getElementById('salcat_removePick');
-  pickSel.innerHTML = ""; removeSel.innerHTML = "";
+  catSel.innerHTML = ""; pickSel.innerHTML = ""; removeSel.innerHTML = "";
   names.forEach(n => {
+    catSel.appendChild(new Option(n, n));
     pickSel.appendChild(new Option(n, n));
     removeSel.appendChild(new Option(n, n));
   });
+  renderMiniList('salcatListView', names, salaryCategoryPlans);
 }
 
 async function onSalCatAddSubmit(e){
