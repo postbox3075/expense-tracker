@@ -73,9 +73,18 @@
 
   .catrow{background:var(--panel); border-radius:12px; padding:14px 16px; margin-bottom:8px;}
   .catrow .top{display:flex; justify-content:space-between; align-items:baseline; margin-bottom:8px; gap:8px;}
+  .catrow .top.clickable{cursor:pointer; user-select:none;}
   .catrow .name{font-weight:bold; font-size:14px;}
   .catrow .amounts{font-size:13px; color:var(--muted); white-space:nowrap;}
   .catrow .amounts b{color:var(--ink);}
+  .chevron{display:inline-block; margin-left:8px; color:var(--muted); font-size:11px;}
+  .txlist{margin-top:12px; padding-top:10px; border-top:1px solid var(--line);}
+  .txrow{display:flex; gap:10px; font-size:12.5px; padding:5px 0; color:#C7D6EA; align-items:center;}
+  .txrow .txdate{flex:0 0 78px; color:var(--muted);}
+  .txrow .txdesc{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .txrow .txpaid{flex:0 0 60px; color:var(--muted); font-size:11px;}
+  .txrow .txamt{flex:0 0 auto; font-weight:bold; color:var(--ink);}
+  .txempty{font-size:12.5px; color:var(--muted); padding:4px 0;}
   .barbg{height:9px; border-radius:6px; background:var(--line); overflow:hidden; position:relative;}
   .barfill{height:100%; border-radius:6px; transition:width .4s ease;}
   .badge{display:inline-block; font-size:10.5px; font-weight:bold; padding:2px 8px; border-radius:20px; margin-left:8px;}
@@ -218,6 +227,13 @@ const MONTH_NAMES = ["January","February","March","April","May","June","July","A
 let msalInstance, fileItemId = null;
 
 function inr(n){ return "Rs " + Math.round(n).toLocaleString('en-IN'); }
+function serialToDisplayDate(serial){
+  if (!serial && serial !== 0) return '';
+  const DMONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const epoch = Date.UTC(1899, 11, 30);
+  const d = new Date(epoch + serial * 86400000);
+  return `${String(d.getUTCDate()).padStart(2,'0')}-${DMONTHS[d.getUTCMonth()]}-${d.getUTCFullYear()}`;
+}
 function showStatus(msg, kind){
   const el = document.getElementById('status');
   if (!msg){ el.style.display='none'; return; }
@@ -305,11 +321,14 @@ async function loadDashboard(){
     const selMonth = MONTH_NAMES[selMonthIdx];
     const selYear = parseInt(document.getElementById('yearSel').value, 10);
 
-    const [catData, yearData, monthData, catColData, actualData, cMonth, cYear, cPerson, cAmount] = await Promise.all([
+    const [catData, dateData, yearData, monthData, descData, catColData, paidByData, actualData, cMonth, cYear, cPerson, cAmount] = await Promise.all([
       graphFetch(wsRange(CATEGORY_SHEET, `B${CAT_FIRST}:C${CAT_LAST}`)),
+      graphFetch(wsRange(EXPENSE_SHEET, `A${EXP_FIRST}:A${EXP_LAST}`)),
       graphFetch(wsRange(EXPENSE_SHEET, `B${EXP_FIRST}:B${EXP_LAST}`)),
       graphFetch(wsRange(EXPENSE_SHEET, `C${EXP_FIRST}:C${EXP_LAST}`)),
+      graphFetch(wsRange(EXPENSE_SHEET, `D${EXP_FIRST}:D${EXP_LAST}`)),
       graphFetch(wsRange(EXPENSE_SHEET, `E${EXP_FIRST}:E${EXP_LAST}`)),
+      graphFetch(wsRange(EXPENSE_SHEET, `G${EXP_FIRST}:G${EXP_LAST}`)),
       graphFetch(wsRange(EXPENSE_SHEET, `H${EXP_FIRST}:H${EXP_LAST}`)),
       graphFetch(wsRange(CONTRIB_SHEET, `B${CONTRIB_FIRST}:B${CONTRIB_LAST}`)),
       graphFetch(wsRange(CONTRIB_SHEET, `C${CONTRIB_FIRST}:C${CONTRIB_LAST}`)),
@@ -323,23 +342,34 @@ async function loadDashboard(){
       if (row[0] !== "" && row[0] !== null) categories.push({ name: row[0], planned: row[1] || 0 });
     });
 
-    // aggregate actual spend per category for selected year/month
+    // aggregate actual spend per category for selected year/month, and keep the line items behind each total
     const actualByCat = {};
-    const years = yearData.values, months = monthData.values, cats = catColData.values, actuals = actualData.values;
+    const detailByCat = {};
+    const dates = dateData.values, years = yearData.values, months = monthData.values,
+          descs = descData.values, cats = catColData.values, paidBys = paidByData.values, actuals = actualData.values;
     for (let i = 0; i < years.length; i++){
       if (years[i][0] === selYear && months[i][0] === selMonth){
         const cat = cats[i][0];
         const amt = actuals[i][0] || 0;
-        if (cat) actualByCat[cat] = (actualByCat[cat] || 0) + amt;
+        if (!cat) continue;
+        actualByCat[cat] = (actualByCat[cat] || 0) + amt;
+        if (!detailByCat[cat]) detailByCat[cat] = [];
+        detailByCat[cat].push({
+          date: dates[i][0],
+          desc: descs[i][0] || '(no description)',
+          amount: amt,
+          paidBy: paidBys[i][0] || ''
+        });
       }
     }
+    Object.values(detailByCat).forEach(list => list.sort((a,b) => (a.date||0) - (b.date||0)));
 
     const rows = categories.map(c => {
       const actual = actualByCat[c.name] || 0;
       const saved = Math.max(c.planned - actual, 0);
       const over = Math.max(actual - c.planned, 0);
       const pct = c.planned > 0 ? Math.min(actual / c.planned, 1.4) : (actual > 0 ? 1.4 : 0);
-      return { name: c.name, planned: c.planned, actual, saved, over, pct };
+      return { name: c.name, planned: c.planned, actual, saved, over, pct, transactions: detailByCat[c.name] || [] };
     });
 
     const pool = { husband: 0, wife: 0 };
@@ -436,7 +466,7 @@ function render(rows, monthName, year, pool){
   const sorted = [...rows].sort((a,b) => b.actual - a.actual || b.planned - a.planned);
   const list = document.getElementById('catList');
   list.innerHTML = "";
-  sorted.forEach(r => {
+  sorted.forEach((r, idx) => {
     if (r.planned === 0 && r.actual === 0) return; // skip fully empty rows
     const barColor = r.over > 0 ? "#FF6B6B" : (r.pct >= 0.85 ? "#F5B942" : "#3DDC97");
     const badge = r.over > 0
@@ -446,16 +476,38 @@ function render(rows, monthName, year, pool){
         : r.saved > 0
           ? `<span class="badge saved">Saved ${inr(r.saved)}</span>`
           : "";
+
+    const txRows = r.transactions.length > 0
+      ? r.transactions.map(t => `
+          <div class="txrow">
+            <span class="txdate">${serialToDisplayDate(t.date)}</span>
+            <span class="txdesc">${t.desc}</span>
+            <span class="txpaid">${t.paidBy}</span>
+            <span class="txamt">${inr(t.amount)}</span>
+          </div>`).join('')
+      : `<div class="txempty">No transactions logged in this category this month.</div>`;
+
     const div = document.createElement('div');
     div.className = 'catrow';
     div.innerHTML = `
-      <div class="top">
+      <div class="top clickable" data-idx="${idx}">
         <div class="name">${r.name}${badge}</div>
-        <div class="amounts"><b>${inr(r.actual)}</b> / ${inr(r.planned)}</div>
+        <div class="amounts"><b>${inr(r.actual)}</b> / ${inr(r.planned)} <span class="chevron">▸</span></div>
       </div>
       <div class="barbg"><div class="barfill" style="width:${Math.min(r.pct*100,100)}%; background:${barColor};"></div></div>
+      <div class="txlist" id="tx-${idx}" style="display:none;">${txRows}</div>
     `;
     list.appendChild(div);
+  });
+  list.querySelectorAll('.top.clickable').forEach(el => {
+    el.addEventListener('click', () => {
+      const idx = el.dataset.idx;
+      const panel = document.getElementById('tx-' + idx);
+      const chevron = el.querySelector('.chevron');
+      const open = panel.style.display !== 'none';
+      panel.style.display = open ? 'none' : 'block';
+      chevron.textContent = open ? '▸' : '▾';
+    });
   });
 
   const chipsWrap = document.getElementById('savedChips');
