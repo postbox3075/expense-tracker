@@ -66,6 +66,7 @@
     <button class="tabbtn" data-tab="contrib">Contribution</button>
     <button class="tabbtn" data-tab="salary">Salary Received</button>
     <button class="tabbtn" data-tab="salaryspend">Salary Spend</button>
+    <button class="tabbtn" data-tab="salarycat">Salary Categories</button>
     <button class="tabbtn" data-tab="loan">Hand Loan</button>
     <button class="tabbtn" data-tab="category">Categories</button>
   </div>
@@ -187,7 +188,8 @@
             <div><label>Amount (Rs)</label><input type="number" id="ss_amount" min="0" step="1" required /></div>
           </div>
           <label>What was it for?</label>
-          <input type="text" id="ss_desc" placeholder="e.g. SIP investment, personal loan EMI, shopping" required />
+          <input type="text" id="ss_desc" list="salaryCatList" placeholder="Start typing — pick a suggestion or type a new one" required />
+          <datalist id="salaryCatList"></datalist>
           <label>Notes</label>
           <input type="text" id="ss_notes" placeholder="optional" />
           <button type="submit" class="btn-primary" style="background:#A04000;">Save Spend Entry</button>
@@ -212,6 +214,43 @@
             <div><label>Reason (optional)</label><input type="text" id="l_reason" /></div>
           </div>
           <button type="submit" class="btn-primary" style="background:var(--purple);">Save Loan Entry</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- ===================== SALARY CATEGORIES ===================== -->
+    <div class="tabpanel" id="tab-salarycat">
+      <div class="card">
+        <h2>Manage Salary Categories</h2>
+        <div class="radiogroup" style="margin-bottom:10px;">
+          <label><input type="radio" name="salcatMode" value="add" checked /><span>Add new</span></label>
+          <label><input type="radio" name="salcatMode" value="update" /><span>Update amount</span></label>
+          <label><input type="radio" name="salcatMode" value="remove" /><span>Remove</span></label>
+        </div>
+
+        <form id="salcatAddForm">
+          <label>New Category Name</label>
+          <input type="text" id="salcat_newName" required />
+          <label>Reference Amount (Rs)</label>
+          <input type="number" id="salcat_newAmount" min="0" step="1" required />
+          <label>Notes</label>
+          <input type="text" id="salcat_newNotes" placeholder="optional" />
+          <button type="submit" class="btn-primary" style="background:#6E2C00;">Add Category</button>
+        </form>
+
+        <form id="salcatUpdateForm" style="display:none;">
+          <label>Category</label>
+          <select id="salcat_pick" required></select>
+          <label>New Reference Amount (Rs)</label>
+          <input type="number" id="salcat_newPlan" min="0" step="1" required />
+          <button type="submit" class="btn-primary" style="background:#6E2C00;">Update Amount</button>
+        </form>
+
+        <form id="salcatRemoveForm" style="display:none;">
+          <label>Category to remove</label>
+          <select id="salcat_removePick" required></select>
+          <p class="planned-hint">This removes it from the suggestion list. Past Salary Spend entries already using this name are unaffected.</p>
+          <button type="submit" class="btn-primary" style="background:var(--red);">Remove Category</button>
         </form>
       </div>
     </div>
@@ -260,6 +299,7 @@ const FILE_PATH = "/Family_Expense_Tracker_v15_Fixed.xlsm";
 
 const EXPENSE_SHEET   = "Expense Log";
 const CATEGORY_SHEET  = "Category Master";
+const SALARY_CAT_SHEET = "Salary Category Master";
 const SALARY_RECEIVED_SHEET = "Salary Received Log";
 const SALARY_SPEND_SHEET    = "Salary Spend Log";
 const LOAN_SHEET      = "Hand Loan Log";
@@ -268,6 +308,7 @@ const CONTRIB_SHEET   = "Contribution Log";
 
 const CAT_FIRST = 4, CAT_LAST = 43;          // Category Master data rows
 const CATLOG_FIRST = 47, CATLOG_LAST = 2000; // Category Master change-log rows
+const SALCAT_FIRST = 4, SALCAT_LAST = 43;    // Salary Category Master data rows
 const EXP_FIRST = 5, EXP_LAST = 8004;        // Expense Log data rows
 const SAL_RECV_FIRST = 4, SAL_RECV_LAST = 400;   // Salary Received Log data rows
 const SAL_SPEND_FIRST = 4, SAL_SPEND_LAST = 2000; // Salary Spend Log data rows (line-item granularity)
@@ -315,6 +356,12 @@ document.querySelectorAll('input[name=catMode]').forEach(r => r.addEventListener
   document.getElementById('catAddForm').style.display = isAdd ? 'block' : 'none';
   document.getElementById('catUpdateForm').style.display = isAdd ? 'none' : 'block';
 }));
+document.querySelectorAll('input[name=salcatMode]').forEach(r => r.addEventListener('change', () => {
+  const mode = document.querySelector('input[name=salcatMode]:checked').value;
+  document.getElementById('salcatAddForm').style.display = mode === 'add' ? 'block' : 'none';
+  document.getElementById('salcatUpdateForm').style.display = mode === 'update' ? 'block' : 'none';
+  document.getElementById('salcatRemoveForm').style.display = mode === 'remove' ? 'block' : 'none';
+}));
 
 /* ---------- Auth ---------- */
 async function init(){
@@ -345,6 +392,9 @@ async function init(){
   document.getElementById('loanForm').addEventListener('submit', onLoanSubmit);
   document.getElementById('catAddForm').addEventListener('submit', onCatAddSubmit);
   document.getElementById('catUpdateForm').addEventListener('submit', onCatUpdateSubmit);
+  document.getElementById('salcatAddForm').addEventListener('submit', onSalCatAddSubmit);
+  document.getElementById('salcatUpdateForm').addEventListener('submit', onSalCatUpdateSubmit);
+  document.getElementById('salcatRemoveForm').addEventListener('submit', onSalCatRemoveSubmit);
   document.getElementById('s_date').valueAsDate = new Date();
   document.getElementById('ss_date').valueAsDate = new Date();
 
@@ -379,7 +429,7 @@ async function onSignedIn(account){
   showStatus("Connecting to your Excel file…", "busy");
   try{
     await resolveFile();
-    await loadCategories();
+    await Promise.all([loadCategories(), loadSalaryCategories()]);
     showStatus("Connected. Ready.", "ok");
   } catch(e){
     showStatus("Could not connect: " + e.message, "err");
@@ -418,7 +468,9 @@ function confirmIdentityPick(){
   // If the app wasn't connected yet (first run), connect now.
   if (!fileItemId){
     showStatus("Connecting to your Excel file…", "busy");
-    resolveFile().then(loadCategories).then(() => showStatus("Connected. Ready.", "ok"))
+    resolveFile()
+      .then(() => Promise.all([loadCategories(), loadSalaryCategories()]))
+      .then(() => showStatus("Connected. Ready.", "ok"))
       .catch(e => showStatus("Could not connect: " + e.message, "err"));
   }
 }
@@ -699,6 +751,104 @@ async function onCatUpdateSubmit(e){
     showStatus(`${name} updated to Rs ${newPlan.toLocaleString('en-IN')} ✅`, "ok");
     e.target.reset();
     await loadCategories();
+  } catch(err){ showStatus("Error: " + err.message, "err"); }
+  finally { btn.disabled = false; }
+}
+
+/* ===================== SALARY CATEGORIES ===================== */
+let salaryCategoryPlans = {};
+
+async function loadSalaryCategories(){
+  const data = await graphFetch(wsRange(SALARY_CAT_SHEET, `B${SALCAT_FIRST}:D${SALCAT_LAST}`));
+  salaryCategoryPlans = {};
+  const names = [];
+  data.values.forEach(row => {
+    const name = row[0], amt = row[1], active = row[2];
+    if (name !== "" && name !== null && active !== "No"){ salaryCategoryPlans[name] = amt || 0; names.push(name); }
+  });
+
+  const datalist = document.getElementById('salaryCatList');
+  datalist.innerHTML = "";
+  names.forEach(n => datalist.appendChild(new Option(n, n)));
+
+  const pickSel = document.getElementById('salcat_pick');
+  const removeSel = document.getElementById('salcat_removePick');
+  pickSel.innerHTML = ""; removeSel.innerHTML = "";
+  names.forEach(n => {
+    pickSel.appendChild(new Option(n, n));
+    removeSel.appendChild(new Option(n, n));
+  });
+}
+
+async function onSalCatAddSubmit(e){
+  e.preventDefault();
+  const btn = e.target.querySelector('button');
+  btn.disabled = true; showStatus("Adding salary category…", "busy");
+  try{
+    const name = document.getElementById('salcat_newName').value.trim();
+    const amount = parseFloat(document.getElementById('salcat_newAmount').value);
+    const notes = document.getElementById('salcat_newNotes').value.trim();
+    if (!name || isNaN(amount)) throw new Error("Enter a name and a valid amount.");
+    const t = todayParts();
+
+    const row = await findNextEmptyRow(SALARY_CAT_SHEET, 'B', SALCAT_FIRST, SALCAT_LAST);
+    await graphFetch(wsRange(SALARY_CAT_SHEET, `A${row}:F${row}`), { method:"PATCH",
+      body: JSON.stringify({ values: [[row - 3, name, amount, "Yes", t.serial, notes]] }) });
+
+    showStatus(`Salary category "${name}" added ✅`, "ok");
+    e.target.reset();
+    await loadSalaryCategories();
+  } catch(err){ showStatus("Error: " + err.message, "err"); }
+  finally { btn.disabled = false; }
+}
+
+async function onSalCatUpdateSubmit(e){
+  e.preventDefault();
+  const btn = e.target.querySelector('button');
+  btn.disabled = true; showStatus("Updating salary category…", "busy");
+  try{
+    const name = document.getElementById('salcat_pick').value;
+    const newAmt = parseFloat(document.getElementById('salcat_newPlan').value);
+    if (!name || isNaN(newAmt)) throw new Error("Pick a category and enter a valid amount.");
+
+    const data = await graphFetch(wsRange(SALARY_CAT_SHEET, `B${SALCAT_FIRST}:B${SALCAT_LAST}`));
+    let targetRow = null;
+    for (let i = 0; i < data.values.length; i++){
+      if (data.values[i][0] === name){ targetRow = SALCAT_FIRST + i; break; }
+    }
+    if (!targetRow) throw new Error("Category not found.");
+
+    await graphFetch(wsRange(SALARY_CAT_SHEET, `C${targetRow}`), { method:"PATCH",
+      body: JSON.stringify({ values: [[newAmt]] }) });
+
+    showStatus(`${name} updated to Rs ${newAmt.toLocaleString('en-IN')} ✅`, "ok");
+    e.target.reset();
+    await loadSalaryCategories();
+  } catch(err){ showStatus("Error: " + err.message, "err"); }
+  finally { btn.disabled = false; }
+}
+
+async function onSalCatRemoveSubmit(e){
+  e.preventDefault();
+  const btn = e.target.querySelector('button');
+  btn.disabled = true; showStatus("Removing salary category…", "busy");
+  try{
+    const name = document.getElementById('salcat_removePick').value;
+    if (!name) throw new Error("Pick a category to remove.");
+
+    const data = await graphFetch(wsRange(SALARY_CAT_SHEET, `B${SALCAT_FIRST}:B${SALCAT_LAST}`));
+    let targetRow = null;
+    for (let i = 0; i < data.values.length; i++){
+      if (data.values[i][0] === name){ targetRow = SALCAT_FIRST + i; break; }
+    }
+    if (!targetRow) throw new Error("Category not found.");
+
+    // Clear the whole row rather than shifting others up — keeps every other row's position stable.
+    await graphFetch(wsRange(SALARY_CAT_SHEET, `A${targetRow}:F${targetRow}`), { method:"PATCH",
+      body: JSON.stringify({ values: [["", "", "", "", "", ""]] }) });
+
+    showStatus(`"${name}" removed ✅`, "ok");
+    await loadSalaryCategories();
   } catch(err){ showStatus("Error: " + err.message, "err"); }
   finally { btn.disabled = false; }
 }
