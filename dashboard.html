@@ -87,6 +87,18 @@
   .savedchip{background:rgba(61,220,151,.1); border:1px solid var(--green-dim); color:var(--green); border-radius:20px; padding:6px 14px; font-size:13px;}
   .savedchip b{color:var(--ink);}
 
+  .reco{background:var(--panel); border-radius:12px; padding:14px 16px; margin-bottom:10px; border-left:4px solid var(--blue); display:flex; gap:12px;}
+  .reco.sev-red{border-color:var(--red);}
+  .reco.sev-amber{border-color:var(--amber);}
+  .reco.sev-blue{border-color:var(--blue);}
+  .reco.sev-green{border-color:var(--green);}
+  .reco .icon{font-size:20px; flex:0 0 auto;}
+  .reco .body h4{margin:0 0 4px; font-size:14px;}
+  .reco .body p{margin:0; font-size:13px; line-height:1.55; color:#C7D6EA;}
+  .reco .body p b{color:var(--ink);}
+  .reco .body ul{margin:6px 0 0; padding-left:18px; font-size:13px; color:#C7D6EA;}
+  .reco .body ul li{margin-bottom:3px;}
+
   #status{font-size:13px; margin-top:16px; padding:10px 14px; border-radius:10px; display:none;}
   #status.busy{display:block; background:var(--panel2); color:var(--blue);}
   #status.err{display:block; background:rgba(255,107,107,.12); color:var(--red);}
@@ -171,6 +183,9 @@
 
     <div class="sectiontitle">Fully saved this month</div>
     <div class="savedlist" id="savedChips"></div>
+
+    <div class="sectiontitle">Recommendations</div>
+    <div id="recoList"></div>
 
     <div id="status"></div>
   </div>
@@ -456,6 +471,84 @@ function render(rows, monthName, year, pool){
       chipsWrap.appendChild(chip);
     });
   }
+
+  renderRecommendations(rows, pool, totalPlanned, totalActual);
+}
+
+/* ---------- Recommendations: plain rules over this month's data, no guessing ---------- */
+function renderRecommendations(rows, pool, totalPlanned, totalActual){
+  const recos = [];
+  const usedRows = rows.filter(r => r.planned > 0 || r.actual > 0);
+  const totalPool = pool.husband + pool.wife;
+
+  // 1. Spending with no budget set at all
+  const unbudgeted = rows.filter(r => r.planned === 0 && r.actual > 0).sort((a,b) => b.actual - a.actual);
+  if (unbudgeted.length > 0){
+    const sum = unbudgeted.reduce((s,r) => s + r.actual, 0);
+    const names = unbudgeted.map(r => r.name).join(', ');
+    const severity = sum > totalActual * 0.15 ? 'sev-red' : 'sev-amber';
+    let extra = '';
+    const top = unbudgeted[0];
+    if (top.actual > sum * 0.4 && top.actual >= 2000){
+      extra = `<p style="margin-top:8px;">"<b>${top.name}</b>" alone is <b>${inr(top.actual)}</b> — if that's a mix of different things, consider splitting it into a few specific categories so you can actually see what's driving it.</p>`;
+    }
+    recos.push({ sev: severity, icon: '🏷️', title: 'Spending with no budget set',
+      html: `<p>You spent <b>${inr(sum)}</b> across <b>${unbudgeted.length}</b> ${unbudgeted.length===1?'category':'categories'} with no planned amount (${names}). Give these a budget in Category Master so they show up properly instead of always reading as "over."</p>${extra}` });
+  }
+
+  // 2. Categories meaningfully over their own budget (20%+)
+  const overBad = rows.filter(r => r.planned > 0 && r.actual > r.planned * 1.2)
+    .sort((a,b) => b.over - a.over).slice(0, 4);
+  if (overBad.length > 0){
+    const items = overBad.map(r => {
+      const pctOver = Math.round((r.actual / r.planned - 1) * 100);
+      const suggested = Math.ceil(r.actual / 500) * 500;
+      return `<li><b>${r.name}</b> — Rs ${Math.round(r.actual).toLocaleString('en-IN')} vs Rs ${Math.round(r.planned).toLocaleString('en-IN')} planned (${pctOver}% over). Consider raising the budget to around <b>${inr(suggested)}</b>, or cutting back here.</li>`;
+    }).join('');
+    recos.push({ sev: 'sev-red', icon: '📈', title: 'Consistently over budget',
+      html: `<ul>${items}</ul>` });
+  }
+
+  // 3. Categories close to their limit but not over yet
+  const nearLimit = rows.filter(r => r.planned > 0 && r.actual > 0 && r.actual <= r.planned && r.actual >= r.planned * 0.85);
+  if (nearLimit.length > 0){
+    const names = nearLimit.map(r => r.name).join(', ');
+    recos.push({ sev: 'sev-amber', icon: '⏳', title: 'About to hit their limit',
+      html: `<p><b>${names}</b> ${nearLimit.length===1?'is':'are'} within 15% of budget — worth a heads-up before ${nearLimit.length===1?'it tips':'they tip'} into overspend.</p>` });
+  }
+
+  // 4. A large share of categories untouched this month
+  const untouched = rows.filter(r => r.actual === 0 && r.planned > 0);
+  if (usedRows.length > 0 && untouched.length / usedRows.length >= 0.25){
+    const sum = untouched.reduce((s,r) => s + r.planned, 0);
+    recos.push({ sev: 'sev-blue', icon: '🗂️', title: 'A lot of budget sitting untouched',
+      html: `<p><b>${untouched.length}</b> of <b>${usedRows.length}</b> categories saw no spending this month — <b>${inr(sum)}</b> of planned budget. If that's typical every month, it might be worth reviewing whether they're still needed, or moving that budget somewhere it's actually used.</p>` });
+  }
+
+  // 5. Pool vs plan
+  const gap = totalPool - totalPlanned;
+  if (totalPool > 0 && gap < 0){
+    recos.push({ sev: 'sev-red', icon: '💰', title: 'Pool is short of the plan',
+      html: `<p>The household pool (<b>${inr(totalPool)}</b>) is <b>${inr(-gap)}</b> short of what's planned to be spent (<b>${inr(totalPlanned)}</b>). Either increase contributions or trim planned budgets to match.</p>` });
+  } else if (totalPool > 0 && gap > totalPlanned * 0.1){
+    recos.push({ sev: 'sev-blue', icon: '💰', title: 'More coming in than planned',
+      html: `<p>Rs <b>${inr(gap)}</b> more has been contributed than is currently planned to be spent. Worth parking it in a savings category or building a buffer for a bigger expense.</p>` });
+  }
+
+  // Fallback: nothing notable
+  if (recos.length === 0){
+    recos.push({ sev: 'sev-green', icon: '🎉', title: 'Nothing stands out this month',
+      html: `<p>Budgets, spending and contributions are all reasonably lined up — no unbudgeted spend, nothing badly over, and the pool covers the plan.</p>` });
+  }
+
+  const list = document.getElementById('recoList');
+  list.innerHTML = "";
+  recos.forEach(r => {
+    const div = document.createElement('div');
+    div.className = 'reco ' + r.sev;
+    div.innerHTML = `<div class="icon">${r.icon}</div><div class="body"><h4>${r.title}</h4>${r.html}</div>`;
+    list.appendChild(div);
+  });
 }
 
 init();
