@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Spend Dashboard — Family Expense Tracker</title>
+<script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3/lib/msal-browser.min.js"></script>
+<style>
+  :root{
+    --navy:#0F1F35; --navy2:#152B47; --panel:#182F4D; --panel2:#1E3A5F;
+    --ink:#EAF1FB; --muted:#8CA3C2; --line:#25405F;
+    --green:#3DDC97; --green-dim:#1F7A54;
+    --amber:#F5B942; --amber-dim:#8A6218;
+    --red:#FF6B6B; --red-dim:#7A2A2A;
+    --blue:#5AA9E6;
+    --gold:#E8C468;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--navy);
+    color:var(--ink); font-family:'Segoe UI', Arial, Helvetica, sans-serif; -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:960px; margin:0 auto; padding:20px 16px 60px;}
+
+  header{display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px; margin-bottom:20px;}
+  header .title{font-size:22px; font-weight:800; letter-spacing:-0.02em;}
+  header .title span{color:var(--gold);}
+  header .sub{color:var(--muted); font-size:13px; margin-top:2px;}
+  .userbox{font-size:12px; color:var(--muted); text-align:right;}
+  .userbox button{background:none; border:none; color:var(--blue); text-decoration:underline; cursor:pointer; font-size:12px; padding:0;}
+
+  .controls{display:flex; gap:10px; align-items:center; margin-bottom:20px; flex-wrap:wrap;}
+  select, .refreshBtn{
+    background:var(--panel); border:1px solid var(--line); color:var(--ink); border-radius:10px;
+    padding:9px 14px; font-size:14px; font-family:inherit;
+  }
+  .refreshBtn{cursor:pointer; font-weight:bold; color:var(--gold); border-color:var(--gold);}
+  .refreshBtn:disabled{opacity:.5; cursor:default;}
+
+  #signedOutCard{background:var(--panel); border-radius:16px; padding:28px; text-align:center;}
+  #signedOutCard button{
+    margin-top:14px; background:var(--gold); color:#2A2100; border:none; border-radius:10px;
+    padding:12px 22px; font-weight:bold; font-size:14px; cursor:pointer;
+  }
+
+  #dash{display:none;}
+
+  .statgrid{display:grid; grid-template-columns:repeat(auto-fit, minmax(150px,1fr)); gap:12px; margin-bottom:20px;}
+  .stat{background:var(--panel); border-radius:14px; padding:16px; border-left:4px solid var(--blue);}
+  .stat.planned{border-color:var(--blue);}
+  .stat.actual{border-color:var(--gold);}
+  .stat.saved{border-color:var(--green);}
+  .stat.over{border-color:var(--red);}
+  .stat .label{font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin-bottom:6px;}
+  .stat .value{font-size:22px; font-weight:800;}
+  .stat .value small{font-size:12px; font-weight:normal; color:var(--muted);}
+
+  .hero{display:flex; gap:20px; align-items:center; background:var(--panel); border-radius:16px; padding:24px; margin-bottom:24px; flex-wrap:wrap;}
+  .ringwrap{position:relative; flex:0 0 auto;}
+  .ringtext{position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); text-align:center;}
+  .ringtext .pct{font-size:30px; font-weight:800;}
+  .ringtext .lbl{font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em;}
+  .heroinfo{flex:1; min-width:200px;}
+  .heroinfo h3{margin:0 0 6px; font-size:15px; color:var(--muted); font-weight:600;}
+  .heroinfo p{margin:0; font-size:14px; line-height:1.6; color:#C7D6EA;}
+  .heroinfo b{color:var(--ink);}
+
+  .sectiontitle{font-size:13px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin:26px 0 12px; display:flex; align-items:center; gap:8px;}
+  .sectiontitle::after{content:''; flex:1; height:1px; background:var(--line);}
+
+  .catrow{background:var(--panel); border-radius:12px; padding:14px 16px; margin-bottom:8px;}
+  .catrow .top{display:flex; justify-content:space-between; align-items:baseline; margin-bottom:8px; gap:8px;}
+  .catrow .name{font-weight:bold; font-size:14px;}
+  .catrow .amounts{font-size:13px; color:var(--muted); white-space:nowrap;}
+  .catrow .amounts b{color:var(--ink);}
+  .barbg{height:9px; border-radius:6px; background:var(--line); overflow:hidden; position:relative;}
+  .barfill{height:100%; border-radius:6px; transition:width .4s ease;}
+  .badge{display:inline-block; font-size:10.5px; font-weight:bold; padding:2px 8px; border-radius:20px; margin-left:8px;}
+  .badge.saved{background:rgba(61,220,151,.15); color:var(--green);}
+  .badge.over{background:rgba(255,107,107,.15); color:var(--red);}
+  .badge.untouched{background:rgba(90,169,230,.15); color:var(--blue);}
+
+  .savedlist{display:flex; flex-wrap:wrap; gap:8px;}
+  .savedchip{background:rgba(61,220,151,.1); border:1px solid var(--green-dim); color:var(--green); border-radius:20px; padding:6px 14px; font-size:13px;}
+  .savedchip b{color:var(--ink);}
+
+  #status{font-size:13px; margin-top:16px; padding:10px 14px; border-radius:10px; display:none;}
+  #status.busy{display:block; background:var(--panel2); color:var(--blue);}
+  #status.err{display:block; background:rgba(255,107,107,.12); color:var(--red);}
+
+  .config-warning{background:#3A2E10; color:#F5B942; padding:14px; border-radius:10px; font-size:13px; margin-bottom:16px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div>
+      <div class="title">📊 Spend <span>Dashboard</span></div>
+      <div class="sub">Planned vs actual, by category — live from your OneDrive file</div>
+    </div>
+    <div class="userbox" id="userbox" style="display:none;">
+      <div id="userLabel"></div>
+      <button id="logoutBtn">Sign out</button>
+    </div>
+  </header>
+
+  <div id="configWarning" class="config-warning" style="display:none;">
+    ⚠️ Not configured yet — fill in <code>CLIENT_ID</code> and <code>FILE_PATH</code> near the top of the script.
+  </div>
+
+  <div id="signedOutCard">
+    <div style="font-size:15px; color:var(--muted); margin-bottom:4px;">Sign in to view your spending dashboard</div>
+    <button id="loginBtn">Sign in with Microsoft</button>
+  </div>
+
+  <div id="dash">
+    <div class="controls">
+      <select id="monthSel"></select>
+      <select id="yearSel"></select>
+      <button class="refreshBtn" id="refreshBtn">↻ Refresh</button>
+    </div>
+
+    <div class="statgrid">
+      <div class="stat planned"><div class="label">Total Planned</div><div class="value" id="statPlanned">—</div></div>
+      <div class="stat actual"><div class="label">Total Spent</div><div class="value" id="statActual">—</div></div>
+      <div class="stat saved"><div class="label">Total Saved</div><div class="value" id="statSaved">—</div></div>
+      <div class="stat over"><div class="label">Total Overspent</div><div class="value" id="statOver">—</div></div>
+    </div>
+
+    <div class="hero">
+      <div class="ringwrap">
+        <svg width="140" height="140" viewBox="0 0 140 140">
+          <circle cx="70" cy="70" r="58" fill="none" stroke="#25405F" stroke-width="14"/>
+          <circle id="ringFg" cx="70" cy="70" r="58" fill="none" stroke="#3DDC97" stroke-width="14"
+                  stroke-linecap="round" stroke-dasharray="364" stroke-dashoffset="364"
+                  transform="rotate(-90 70 70)" style="transition:stroke-dashoffset .6s ease, stroke .3s;"/>
+        </svg>
+        <div class="ringtext"><div class="pct" id="ringPct">0%</div><div class="lbl">of budget</div></div>
+      </div>
+      <div class="heroinfo">
+        <h3 id="heroMonth">This month</h3>
+        <p id="heroText">Loading your numbers…</p>
+      </div>
+    </div>
+
+    <div class="sectiontitle">By category</div>
+    <div id="catList"></div>
+
+    <div class="sectiontitle">Fully saved this month</div>
+    <div class="savedlist" id="savedChips"></div>
+
+    <div id="status"></div>
+  </div>
+
+</div>
+
+<script>
+/* =====================================================================
+   CONFIGURE, THEN COMMIT
+   ===================================================================== */
+const CLIENT_ID = "66b07780-e164-4438-a80f-224ff11391fc";
+const FILE_PATH = "/Family_Expense_Tracker_v15_Fixed.xlsm";
+const CATEGORY_SHEET = "Category Master";
+const EXPENSE_SHEET  = "Expense Log";
+const CAT_FIRST = 4, CAT_LAST = 43;
+const EXP_FIRST = 5, EXP_LAST = 8004;
+/* ===================================================================== */
+
+const REDIRECT_URI = window.location.href.split('#')[0].split('?')[0];
+const msalConfig = {
+  auth: { clientId: CLIENT_ID, authority: "https://login.microsoftonline.com/consumers", redirectUri: REDIRECT_URI },
+  cache: { cacheLocation: "localStorage" }
+};
+const GRAPH_SCOPES = ["Files.ReadWrite", "User.Read"];
+const GRAPH_BASE = "https://graph.microsoft.com/v1.0";
+const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+
+let msalInstance, fileItemId = null;
+
+function inr(n){ return "Rs " + Math.round(n).toLocaleString('en-IN'); }
+function showStatus(msg, kind){
+  const el = document.getElementById('status');
+  if (!msg){ el.style.display='none'; return; }
+  el.textContent = msg; el.className = kind;
+}
+
+async function init(){
+  if (CLIENT_ID.startsWith("PASTE-") || !FILE_PATH){
+    document.getElementById('configWarning').style.display = 'block';
+  }
+  const monthSel = document.getElementById('monthSel');
+  const yearSel = document.getElementById('yearSel');
+  MONTH_NAMES.forEach((m,i) => monthSel.appendChild(new Option(m, i)));
+  const thisYear = new Date().getFullYear();
+  for (let y = thisYear - 2; y <= thisYear + 3; y++) yearSel.appendChild(new Option(y, y));
+  monthSel.value = new Date().getMonth();
+  yearSel.value = thisYear;
+
+  msalInstance = new msal.PublicClientApplication(msalConfig);
+  await msalInstance.initialize();
+  const accounts = msalInstance.getAllAccounts();
+  if (accounts.length > 0){
+    msalInstance.setActiveAccount(accounts[0]);
+    await onSignedIn(accounts[0]);
+  }
+  document.getElementById('loginBtn').addEventListener('click', doLogin);
+  document.getElementById('logoutBtn').addEventListener('click', () => msalInstance.logoutPopup());
+  document.getElementById('refreshBtn').addEventListener('click', loadDashboard);
+  monthSel.addEventListener('change', loadDashboard);
+  yearSel.addEventListener('change', loadDashboard);
+}
+
+async function doLogin(){
+  try{
+    const result = await msalInstance.loginPopup({ scopes: GRAPH_SCOPES });
+    msalInstance.setActiveAccount(result.account);
+    await onSignedIn(result.account);
+  } catch(e){ alert("Sign-in failed: " + e.message); }
+}
+
+async function onSignedIn(account){
+  document.getElementById('signedOutCard').style.display = 'none';
+  document.getElementById('dash').style.display = 'block';
+  document.getElementById('userbox').style.display = 'block';
+  document.getElementById('userLabel').textContent = account.username;
+  await loadDashboard();
+}
+
+async function getToken(){
+  const account = msalInstance.getActiveAccount();
+  try{
+    const result = await msalInstance.acquireTokenSilent({ scopes: GRAPH_SCOPES, account });
+    return result.accessToken;
+  } catch(e){
+    const result = await msalInstance.acquireTokenPopup({ scopes: GRAPH_SCOPES });
+    return result.accessToken;
+  }
+}
+async function graphFetch(path, options = {}){
+  const token = await getToken();
+  const res = await fetch(GRAPH_BASE + path, {
+    ...options,
+    headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json", ...(options.headers || {}) }
+  });
+  if (!res.ok){ const body = await res.text(); throw new Error(`Graph API ${res.status}: ${body.slice(0,200)}`); }
+  return res.status === 204 ? null : res.json();
+}
+function wsRange(sheet, addr){
+  return `/me/drive/items/${fileItemId}/workbook/worksheets('${encodeURIComponent(sheet)}')/range(address='${addr}')`;
+}
+async function resolveFile(){
+  if (fileItemId) return;
+  const encodedPath = FILE_PATH.split('/').map(encodeURIComponent).join('/');
+  const data = await graphFetch(`/me/drive/root:${encodedPath}`);
+  fileItemId = data.id;
+}
+
+async function loadDashboard(){
+  const btn = document.getElementById('refreshBtn');
+  btn.disabled = true;
+  showStatus("Loading your numbers…", "busy");
+  try{
+    await resolveFile();
+    const selMonthIdx = parseInt(document.getElementById('monthSel').value, 10);
+    const selMonth = MONTH_NAMES[selMonthIdx];
+    const selYear = parseInt(document.getElementById('yearSel').value, 10);
+
+    const [catData, yearData, monthData, catColData, actualData] = await Promise.all([
+      graphFetch(wsRange(CATEGORY_SHEET, `B${CAT_FIRST}:C${CAT_LAST}`)),
+      graphFetch(wsRange(EXPENSE_SHEET, `B${EXP_FIRST}:B${EXP_LAST}`)),
+      graphFetch(wsRange(EXPENSE_SHEET, `C${EXP_FIRST}:C${EXP_LAST}`)),
+      graphFetch(wsRange(EXPENSE_SHEET, `E${EXP_FIRST}:E${EXP_LAST}`)),
+      graphFetch(wsRange(EXPENSE_SHEET, `H${EXP_FIRST}:H${EXP_LAST}`)),
+    ]);
+
+    // categories: name -> planned
+    const categories = [];
+    catData.values.forEach(row => {
+      if (row[0] !== "" && row[0] !== null) categories.push({ name: row[0], planned: row[1] || 0 });
+    });
+
+    // aggregate actual spend per category for selected year/month
+    const actualByCat = {};
+    const years = yearData.values, months = monthData.values, cats = catColData.values, actuals = actualData.values;
+    for (let i = 0; i < years.length; i++){
+      if (years[i][0] === selYear && months[i][0] === selMonth){
+        const cat = cats[i][0];
+        const amt = actuals[i][0] || 0;
+        if (cat) actualByCat[cat] = (actualByCat[cat] || 0) + amt;
+      }
+    }
+
+    const rows = categories.map(c => {
+      const actual = actualByCat[c.name] || 0;
+      const saved = Math.max(c.planned - actual, 0);
+      const over = Math.max(actual - c.planned, 0);
+      const pct = c.planned > 0 ? Math.min(actual / c.planned, 1.4) : (actual > 0 ? 1.4 : 0);
+      return { name: c.name, planned: c.planned, actual, saved, over, pct };
+    });
+
+    render(rows, selMonth, selYear);
+    showStatus("", "");
+  } catch(e){
+    showStatus("Could not load: " + e.message, "err");
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function render(rows, monthName, year){
+  const totalPlanned = rows.reduce((s,r) => s + r.planned, 0);
+  const totalActual  = rows.reduce((s,r) => s + r.actual, 0);
+  const totalSaved   = rows.reduce((s,r) => s + r.saved, 0);
+  const totalOver    = rows.reduce((s,r) => s + r.over, 0);
+
+  document.getElementById('statPlanned').textContent = inr(totalPlanned);
+  document.getElementById('statActual').textContent = inr(totalActual);
+  document.getElementById('statSaved').textContent = inr(totalSaved);
+  document.getElementById('statOver').textContent = inr(totalOver);
+
+  const usedPct = totalPlanned > 0 ? Math.min(totalActual / totalPlanned, 1) : 0;
+  const circumference = 364;
+  const ring = document.getElementById('ringFg');
+  ring.style.strokeDashoffset = circumference - circumference * usedPct;
+  ring.style.stroke = usedPct >= 1 ? "#FF6B6B" : usedPct >= 0.85 ? "#F5B942" : "#3DDC97";
+  document.getElementById('ringPct').textContent = Math.round(usedPct * 100) + "%";
+
+  document.getElementById('heroMonth').textContent = monthName + " " + year;
+  const untouched = rows.filter(r => r.actual === 0 && r.planned > 0).length;
+  const overCount = rows.filter(r => r.over > 0).length;
+  document.getElementById('heroText').innerHTML =
+    `You've spent <b>${inr(totalActual)}</b> of <b>${inr(totalPlanned)}</b> planned this month. ` +
+    (untouched > 0 ? `<b>${untouched}</b> ${untouched===1?'category hasn\'t':'categories haven\'t'} been touched — that budget rolls up as savings. ` : '') +
+    (overCount > 0 ? `<b>${overCount}</b> ${overCount===1?'category is':'categories are'} over budget.` : `Nothing is over budget. 🎉`);
+
+  const sorted = [...rows].sort((a,b) => b.actual - a.actual || b.planned - a.planned);
+  const list = document.getElementById('catList');
+  list.innerHTML = "";
+  sorted.forEach(r => {
+    if (r.planned === 0 && r.actual === 0) return; // skip fully empty rows
+    const barColor = r.over > 0 ? "#FF6B6B" : (r.pct >= 0.85 ? "#F5B942" : "#3DDC97");
+    const badge = r.over > 0
+      ? `<span class="badge over">Over by ${inr(r.over)}</span>`
+      : r.actual === 0 && r.planned > 0
+        ? `<span class="badge untouched">Untouched</span>`
+        : r.saved > 0
+          ? `<span class="badge saved">Saved ${inr(r.saved)}</span>`
+          : "";
+    const div = document.createElement('div');
+    div.className = 'catrow';
+    div.innerHTML = `
+      <div class="top">
+        <div class="name">${r.name}${badge}</div>
+        <div class="amounts"><b>${inr(r.actual)}</b> / ${inr(r.planned)}</div>
+      </div>
+      <div class="barbg"><div class="barfill" style="width:${Math.min(r.pct*100,100)}%; background:${barColor};"></div></div>
+    `;
+    list.appendChild(div);
+  });
+
+  const chipsWrap = document.getElementById('savedChips');
+  chipsWrap.innerHTML = "";
+  const fullySaved = rows.filter(r => r.actual === 0 && r.planned > 0);
+  if (fullySaved.length === 0){
+    chipsWrap.innerHTML = `<span style="color:var(--muted); font-size:13px;">None yet this month.</span>`;
+  } else {
+    fullySaved.forEach(r => {
+      const chip = document.createElement('span');
+      chip.className = 'savedchip';
+      chip.innerHTML = `${r.name} — <b>${inr(r.planned)}</b>`;
+      chipsWrap.appendChild(chip);
+    });
+  }
+}
+
+init();
+</script>
+</body>
+</html>
