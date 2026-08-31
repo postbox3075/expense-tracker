@@ -248,6 +248,8 @@
         <form id="salcatAddForm">
           <label>New Category Name</label>
           <input type="text" id="salcat_newName" required />
+          <label>Group</label>
+          <select id="salcat_newGroup" required></select>
           <label>Reference Amount (Rs)</label>
           <input type="number" id="salcat_newAmount" min="0" step="1" required />
           <label>Notes</label>
@@ -258,9 +260,11 @@
         <form id="salcatUpdateForm" style="display:none;">
           <label>Category</label>
           <select id="salcat_pick" required></select>
+          <label>Group</label>
+          <select id="salcat_newGroupEdit" required></select>
           <label>New Reference Amount (Rs)</label>
           <input type="number" id="salcat_newPlan" min="0" step="1" required />
-          <button type="submit" class="btn-primary" style="background:#6E2C00;">Update Amount</button>
+          <button type="submit" class="btn-primary" style="background:#6E2C00;">Update Category</button>
         </form>
 
         <form id="salcatRemoveForm" style="display:none;">
@@ -330,6 +334,9 @@ const CONTRIB_SHEET   = "Contribution Log";
 const CAT_FIRST = 4, CAT_LAST = 43;          // Category Master data rows
 const CATLOG_FIRST = 47, CATLOG_LAST = 2000; // Category Master change-log rows
 const SALCAT_FIRST = 4, SALCAT_LAST = 43;    // Salary Category Master data rows
+const SALARY_GROUPS = ["Family Support / Obligations","EMIs / Interest","Transport & Travel",
+  "Utilities & Bills","Household & Living Expenses","Investments / Growth",
+  "Personal Expenses","Work / One-time Expenses","Uncategorized"];
 const EXP_FIRST = 5, EXP_LAST = 8004;        // Expense Log data rows
 const SAL_RECV_FIRST = 4, SAL_RECV_LAST = 400;   // Salary Received Log data rows
 const SAL_SPEND_FIRST = 4, SAL_SPEND_LAST = 2000; // Salary Spend Log data rows (line-item granularity)
@@ -337,7 +344,10 @@ const LOAN_FIRST = 4, LOAN_LAST = 300;       // Hand Loan Log data rows
 const CONTRIB_FIRST = 4, CONTRIB_LAST = 400; // Contribution Log data rows
 /* ===================================================================== */
 
-const REDIRECT_URI = window.location.href.split('#')[0].split('?')[0];
+// Hardcoded on purpose: if this were derived from window.location.href, opening the page via
+// any slightly different URL (e.g. a shared link with /index.html explicit, vs the bare folder
+// URL) would compute a different string than what's registered in Azure and fail to sign in.
+const REDIRECT_URI = "https://postbox3075.github.io/expense-tracker/";
 const msalConfig = {
   auth: { clientId: CLIENT_ID, authority: "https://login.microsoftonline.com/consumers", redirectUri: REDIRECT_URI },
   cache: { cacheLocation: "localStorage" }
@@ -418,6 +428,10 @@ async function init(){
   document.getElementById('salcatRemoveForm').addEventListener('submit', onSalCatRemoveSubmit);
   document.getElementById('s_date').valueAsDate = new Date();
   document.getElementById('ss_date').valueAsDate = new Date();
+  SALARY_GROUPS.forEach(g => {
+    document.getElementById('salcat_newGroup').appendChild(new Option(g, g));
+    document.getElementById('salcat_newGroupEdit').appendChild(new Option(g, g));
+  });
 
   const t = todayParts();
   document.getElementById('c_date').valueAsDate = t.jsDate;
@@ -790,14 +804,20 @@ async function onCatUpdateSubmit(e){
 
 /* ===================== SALARY CATEGORIES ===================== */
 let salaryCategoryPlans = {};
+let salaryCategoryGroups = {};
 
 async function loadSalaryCategories(){
-  const data = await graphFetch(wsRange(SALARY_CAT_SHEET, `B${SALCAT_FIRST}:D${SALCAT_LAST}`));
+  const data = await graphFetch(wsRange(SALARY_CAT_SHEET, `B${SALCAT_FIRST}:G${SALCAT_LAST}`));
   salaryCategoryPlans = {};
+  salaryCategoryGroups = {};
   const names = [];
   data.values.forEach(row => {
-    const name = row[0], amt = row[1], active = row[2];
-    if (name !== "" && name !== null && active !== "No"){ salaryCategoryPlans[name] = amt || 0; names.push(name); }
+    const name = row[0], amt = row[1], active = row[2], group = row[5];
+    if (name !== "" && name !== null && active !== "No"){
+      salaryCategoryPlans[name] = amt || 0;
+      salaryCategoryGroups[name] = group || "Uncategorized";
+      names.push(name);
+    }
   });
 
   const catSel = document.getElementById('ss_category');
@@ -818,14 +838,15 @@ async function onSalCatAddSubmit(e){
   btn.disabled = true; showStatus("Adding salary category…", "busy");
   try{
     const name = document.getElementById('salcat_newName').value.trim();
+    const group = document.getElementById('salcat_newGroup').value;
     const amount = parseFloat(document.getElementById('salcat_newAmount').value);
     const notes = document.getElementById('salcat_newNotes').value.trim();
     if (!name || isNaN(amount)) throw new Error("Enter a name and a valid amount.");
     const t = todayParts();
 
     const row = await findNextEmptyRow(SALARY_CAT_SHEET, 'B', SALCAT_FIRST, SALCAT_LAST);
-    await graphFetch(wsRange(SALARY_CAT_SHEET, `A${row}:F${row}`), { method:"PATCH",
-      body: JSON.stringify({ values: [[row - 3, name, amount, "Yes", t.serial, notes]] }) });
+    await graphFetch(wsRange(SALARY_CAT_SHEET, `A${row}:G${row}`), { method:"PATCH",
+      body: JSON.stringify({ values: [[row - 3, name, amount, "Yes", t.serial, notes, group]] }) });
 
     showStatus(`Salary category "${name}" added ✅`, "ok");
     e.target.reset();
@@ -840,6 +861,7 @@ async function onSalCatUpdateSubmit(e){
   btn.disabled = true; showStatus("Updating salary category…", "busy");
   try{
     const name = document.getElementById('salcat_pick').value;
+    const newGroup = document.getElementById('salcat_newGroupEdit').value;
     const newAmt = parseFloat(document.getElementById('salcat_newPlan').value);
     if (!name || isNaN(newAmt)) throw new Error("Pick a category and enter a valid amount.");
 
@@ -852,6 +874,8 @@ async function onSalCatUpdateSubmit(e){
 
     await graphFetch(wsRange(SALARY_CAT_SHEET, `C${targetRow}`), { method:"PATCH",
       body: JSON.stringify({ values: [[newAmt]] }) });
+    await graphFetch(wsRange(SALARY_CAT_SHEET, `G${targetRow}`), { method:"PATCH",
+      body: JSON.stringify({ values: [[newGroup]] }) });
 
     showStatus(`${name} updated to Rs ${newAmt.toLocaleString('en-IN')} ✅`, "ok");
     e.target.reset();
@@ -876,8 +900,8 @@ async function onSalCatRemoveSubmit(e){
     if (!targetRow) throw new Error("Category not found.");
 
     // Clear the whole row rather than shifting others up — keeps every other row's position stable.
-    await graphFetch(wsRange(SALARY_CAT_SHEET, `A${targetRow}:F${targetRow}`), { method:"PATCH",
-      body: JSON.stringify({ values: [["", "", "", "", "", ""]] }) });
+    await graphFetch(wsRange(SALARY_CAT_SHEET, `A${targetRow}:G${targetRow}`), { method:"PATCH",
+      body: JSON.stringify({ values: [["", "", "", "", "", "", ""]] }) });
 
     showStatus(`"${name}" removed ✅`, "ok");
     await loadSalaryCategories();

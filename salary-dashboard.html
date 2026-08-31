@@ -69,6 +69,18 @@
   .item .iamt{flex:0 0 auto; font-weight:bold;}
   .empty{font-size:13px; color:var(--muted); padding:10px 0;}
 
+  .typerow{display:flex; flex-wrap:wrap; gap:6px; margin:12px 0 18px;}
+  .typepill{font-size:11px; font-weight:bold; padding:4px 10px; border-radius:20px; white-space:nowrap;}
+
+  .group{border:1px solid var(--line); border-radius:10px; margin-bottom:8px; overflow:hidden;}
+  .grouphdr{display:flex; justify-content:space-between; align-items:center; gap:8px; padding:10px 12px; cursor:pointer; user-select:none; background:rgba(255,255,255,.02);}
+  .grouphdr:hover{background:rgba(255,255,255,.05);}
+  .groupleft{display:flex; align-items:center; gap:8px; min-width:0;}
+  .groupname{font-size:13.5px; font-weight:bold;}
+  .groupchevron{color:var(--muted); font-size:11px; flex:0 0 auto;}
+  .groupamt{font-size:13.5px; font-weight:bold; white-space:nowrap;}
+  .groupitems{display:none; padding:2px 12px 8px;}
+
   #status{font-size:13px; margin-top:16px; padding:10px 14px; border-radius:10px; display:none;}
   #status.busy{display:block; background:var(--panel2); color:var(--blue);}
   #status.err{display:block; background:rgba(255,107,107,.12); color:var(--red);}
@@ -123,7 +135,8 @@
         <div class="pstat"><span class="l">Spent</span><span class="v" id="hSpent">Rs 0</span></div>
         <div class="pstat"><span class="l">Remaining</span><span class="v" id="hRemain">Rs 0</span></div>
         <div class="barbg"><div class="barfill" id="hBar" style="width:0%; background:var(--husband);"></div></div>
-        <div class="itemtitle">Where it went</div>
+        <div id="hTypes" class="typerow"></div>
+        <div class="itemtitle">By group — tap to expand</div>
         <div id="hItems"></div>
       </div>
 
@@ -134,7 +147,8 @@
         <div class="pstat"><span class="l">Spent</span><span class="v" id="wSpent">Rs 0</span></div>
         <div class="pstat"><span class="l">Remaining</span><span class="v" id="wRemain">Rs 0</span></div>
         <div class="barbg"><div class="barfill" id="wBar" style="width:0%; background:var(--wife);"></div></div>
-        <div class="itemtitle">Where it went</div>
+        <div id="wTypes" class="typerow"></div>
+        <div class="itemtitle">By group — tap to expand</div>
         <div id="wItems"></div>
       </div>
     </div>
@@ -152,11 +166,30 @@ const CLIENT_ID = "66b07780-e164-4438-a80f-224ff11391fc";
 const FILE_PATH = "/Family_Expense_Tracker_v15_Fixed.xlsm";
 const SALARY_RECEIVED_SHEET = "Salary Received Log";
 const SALARY_SPEND_SHEET    = "Salary Spend Log";
+const SALARY_CAT_SHEET      = "Salary Category Master";
 const SAL_RECV_FIRST = 4, SAL_RECV_LAST = 400;
 const SAL_SPEND_FIRST = 4, SAL_SPEND_LAST = 2000;
+const SALCAT_FIRST = 4, SALCAT_LAST = 43;
+
+const GROUP_TO_TYPE = {
+  "Family Support / Obligations": "Obligations",
+  "EMIs / Interest": "Obligations",
+  "Transport & Travel": "Needs",
+  "Utilities & Bills": "Needs",
+  "Household & Living Expenses": "Needs",
+  "Investments / Growth": "Growth",
+  "Personal Expenses": "Lifestyle",
+  "Work / One-time Expenses": "One-time",
+  "Uncategorized": "Uncategorized"
+};
+const TYPE_COLORS = {
+  "Needs": "#5AA9E6", "Obligations": "#F5B942", "Growth": "#3DDC97",
+  "Lifestyle": "#E8A0C4", "One-time": "#FF6B6B", "Uncategorized": "#8CA3C2"
+};
 /* ===================================================================== */
 
-const REDIRECT_URI = window.location.href.split('#')[0].split('?')[0];
+// Hardcoded on purpose — see index.html for why (avoids URL-variant mismatches with Azure).
+const REDIRECT_URI = "https://postbox3075.github.io/expense-tracker/salary-dashboard.html";
 const msalConfig = {
   auth: { clientId: CLIENT_ID, authority: "https://login.microsoftonline.com/consumers", redirectUri: REDIRECT_URI },
   cache: { cacheLocation: "localStorage" }
@@ -263,7 +296,8 @@ async function loadData(){
     const selYear = parseInt(document.getElementById('yearSel').value, 10);
 
     const [rDate, rMonth, rYear, rPerson, rAmount, rNotes,
-           sDate, sMonth, sYear, sPerson, sDesc, sAmount, sNotes] = await Promise.all([
+           sDate, sMonth, sYear, sPerson, sDesc, sAmount, sNotes,
+           catNames, catGroups] = await Promise.all([
       graphFetch(wsRange(SALARY_RECEIVED_SHEET, `A${SAL_RECV_FIRST}:A${SAL_RECV_LAST}`)),
       graphFetch(wsRange(SALARY_RECEIVED_SHEET, `B${SAL_RECV_FIRST}:B${SAL_RECV_LAST}`)),
       graphFetch(wsRange(SALARY_RECEIVED_SHEET, `C${SAL_RECV_FIRST}:C${SAL_RECV_LAST}`)),
@@ -277,7 +311,15 @@ async function loadData(){
       graphFetch(wsRange(SALARY_SPEND_SHEET, `E${SAL_SPEND_FIRST}:E${SAL_SPEND_LAST}`)),
       graphFetch(wsRange(SALARY_SPEND_SHEET, `F${SAL_SPEND_FIRST}:F${SAL_SPEND_LAST}`)),
       graphFetch(wsRange(SALARY_SPEND_SHEET, `G${SAL_SPEND_FIRST}:G${SAL_SPEND_LAST}`)),
+      graphFetch(wsRange(SALARY_CAT_SHEET, `B${SALCAT_FIRST}:B${SALCAT_LAST}`)),
+      graphFetch(wsRange(SALARY_CAT_SHEET, `G${SALCAT_FIRST}:G${SALCAT_LAST}`)),
     ]);
+
+    const categoryToGroup = {};
+    for (let i = 0; i < catNames.values.length; i++){
+      const n = catNames.values[i][0];
+      if (n) categoryToGroup[n] = catGroups.values[i][0] || "Uncategorized";
+    }
 
     const received = { Husband: 0, Wife: 0 };
     for (let i = 0; i < rYear.values.length; i++){
@@ -292,11 +334,13 @@ async function loadData(){
       if (sYear.values[i][0] === selYear && sMonth.values[i][0] === selMonth){
         const p = sPerson.values[i][0];
         if (p === "Husband" || p === "Wife"){
+          const desc = sDesc.values[i][0] || '(no description)';
           items[p].push({
             date: sDate.values[i][0],
-            desc: sDesc.values[i][0] || '(no description)',
+            desc,
             amount: sAmount.values[i][0] || 0,
-            notes: sNotes.values[i][0] || ''
+            notes: sNotes.values[i][0] || '',
+            group: categoryToGroup[desc] || "Uncategorized"
           });
         }
       }
@@ -328,15 +372,64 @@ function renderPerson(prefix, monthName, year, receivedAmt, itemList){
   const wrap = document.getElementById(prefix + 'Items');
   if (itemList.length === 0){
     wrap.innerHTML = `<div class="empty">Nothing logged for ${monthName} ${year} yet.</div>`;
+    document.getElementById(prefix + 'Types').innerHTML = '';
     return;
   }
-  wrap.innerHTML = itemList.map(i => `
-    <div class="item">
-      <span class="idate">${serialToDisplayDate(i.date)}</span>
-      <span class="idesc">${i.desc}${i.notes ? `<span class="notes">${i.notes}</span>` : ''}</span>
-      <span class="iamt">${inr(i.amount)}</span>
-    </div>
-  `).join('');
+
+  // Group items by category-group
+  const byGroup = {};
+  itemList.forEach(it => {
+    if (!byGroup[it.group]) byGroup[it.group] = [];
+    byGroup[it.group].push(it);
+  });
+  const groupNames = Object.keys(byGroup).sort((a,b) =>
+    byGroup[b].reduce((s,i)=>s+i.amount,0) - byGroup[a].reduce((s,i)=>s+i.amount,0));
+
+  // Type summary strip (Needs / Obligations / Growth / Lifestyle / One-time / Uncategorized)
+  const byType = {};
+  itemList.forEach(it => {
+    const type = GROUP_TO_TYPE[it.group] || "Uncategorized";
+    byType[type] = (byType[type] || 0) + it.amount;
+  });
+  const typeWrap = document.getElementById(prefix + 'Types');
+  typeWrap.innerHTML = Object.keys(byType)
+    .sort((a,b) => byType[b] - byType[a])
+    .map(t => `<span class="typepill" style="background:${TYPE_COLORS[t]}22; color:${TYPE_COLORS[t]};">${t} · ${inr(byType[t])}</span>`)
+    .join('');
+
+  wrap.innerHTML = groupNames.map((g, idx) => {
+    const groupItems = byGroup[g];
+    const groupTotal = groupItems.reduce((s,i)=>s+i.amount,0);
+    const type = GROUP_TO_TYPE[g] || "Uncategorized";
+    const color = TYPE_COLORS[type];
+    const itemsHtml = groupItems.map(i => `
+      <div class="item">
+        <span class="idate">${serialToDisplayDate(i.date)}</span>
+        <span class="idesc">${i.desc}${i.notes ? `<span class="notes">${i.notes}</span>` : ''}</span>
+        <span class="iamt">${inr(i.amount)}</span>
+      </div>`).join('');
+    return `
+      <div class="group">
+        <div class="grouphdr" data-target="${prefix}-g${idx}">
+          <div class="groupleft">
+            <span class="groupchevron">▸</span>
+            <span class="groupname" style="color:${color};">${g}</span>
+          </div>
+          <span class="groupamt">${inr(groupTotal)}</span>
+        </div>
+        <div class="groupitems" id="${prefix}-g${idx}">${itemsHtml}</div>
+      </div>`;
+  }).join('');
+
+  wrap.querySelectorAll('.grouphdr').forEach(hdr => {
+    hdr.addEventListener('click', () => {
+      const panel = document.getElementById(hdr.dataset.target);
+      const chevron = hdr.querySelector('.groupchevron');
+      const open = panel.style.display === 'block';
+      panel.style.display = open ? 'none' : 'block';
+      chevron.textContent = open ? '▸' : '▾';
+    });
+  });
 }
 
 function render(monthName, year, received, items){
