@@ -74,6 +74,18 @@
   .sectiontitle{font-size:13px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin:26px 0 12px; display:flex; align-items:center; gap:8px;}
   .sectiontitle::after{content:''; flex:1; height:1px; background:var(--line);}
 
+  .typerow{display:flex; flex-wrap:wrap; gap:6px; margin:0 0 16px;}
+  .typepill{font-size:11px; font-weight:bold; padding:4px 10px; border-radius:20px; white-space:nowrap;}
+
+  .group{border:1px solid var(--line); border-radius:12px; margin-bottom:10px; overflow:hidden;}
+  .grouphdr{display:flex; justify-content:space-between; align-items:center; gap:8px; padding:12px 16px; cursor:pointer; user-select:none; background:rgba(255,255,255,.02);}
+  .grouphdr:hover{background:rgba(255,255,255,.05);}
+  .groupleft{display:flex; align-items:center; gap:8px; min-width:0;}
+  .groupname{font-size:14px; font-weight:bold;}
+  .groupchevron{color:var(--muted); font-size:11px; flex:0 0 auto;}
+  .groupamt{font-size:13.5px; font-weight:bold; white-space:nowrap; color:var(--ink);}
+  .groupitems{display:none; padding:0 10px 10px;}
+
   .catrow{background:var(--panel); border-radius:12px; padding:14px 16px; margin-bottom:8px;}
   .catrow .top{display:flex; justify-content:space-between; align-items:baseline; margin-bottom:8px; gap:8px;}
   .catrow .top.clickable{cursor:pointer; user-select:none;}
@@ -195,6 +207,7 @@
     </div>
 
     <div class="sectiontitle">By category</div>
+    <div id="groupTypes" class="typerow"></div>
     <div id="catList"></div>
 
     <div class="sectiontitle">Fully saved this month</div>
@@ -219,10 +232,21 @@ const EXPENSE_SHEET  = "Expense Log";
 const CONTRIB_SHEET  = "Contribution Log";
 const CONTRIB_FIRST = 4, CONTRIB_LAST = 400;
 const CAT_FIRST = 4, CAT_LAST = 43;
+const HOUSEHOLD_GROUP_TO_TYPE = {
+  "Food & Groceries": "Needs", "Utilities & Bills": "Needs", "Transport & Travel": "Needs",
+  "Health & Personal Care": "Needs", "Education & Kids": "Obligations", "Household Help": "Obligations",
+  "Family & Social": "Lifestyle", "Shopping & Misc": "Lifestyle",
+  "Savings & Investment": "Growth", "Uncategorized": "Uncategorized"
+};
+const HH_TYPE_COLORS = {
+  "Needs": "#5AA9E6", "Obligations": "#F5B942", "Growth": "#3DDC97",
+  "Lifestyle": "#E8A0C4", "Uncategorized": "#8CA3C2"
+};
 const EXP_FIRST = 5, EXP_LAST = 8004;
 /* ===================================================================== */
 
-const REDIRECT_URI = window.location.href.split('#')[0].split('?')[0];
+// Hardcoded on purpose — see index.html for why (avoids URL-variant mismatches with Azure).
+const REDIRECT_URI = "https://postbox3075.github.io/expense-tracker/dashboard.html";
 const msalConfig = {
   auth: { clientId: CLIENT_ID, authority: "https://login.microsoftonline.com/consumers", redirectUri: REDIRECT_URI },
   cache: { cacheLocation: "localStorage" }
@@ -329,7 +353,7 @@ async function loadDashboard(){
     const selYear = parseInt(document.getElementById('yearSel').value, 10);
 
     const [catData, dateData, yearData, monthData, descData, catColData, paidByData, actualData, cMonth, cYear, cPerson, cAmount] = await Promise.all([
-      graphFetch(wsRange(CATEGORY_SHEET, `B${CAT_FIRST}:C${CAT_LAST}`)),
+      graphFetch(wsRange(CATEGORY_SHEET, `B${CAT_FIRST}:G${CAT_LAST}`)),
       graphFetch(wsRange(EXPENSE_SHEET, `A${EXP_FIRST}:A${EXP_LAST}`)),
       graphFetch(wsRange(EXPENSE_SHEET, `B${EXP_FIRST}:B${EXP_LAST}`)),
       graphFetch(wsRange(EXPENSE_SHEET, `C${EXP_FIRST}:C${EXP_LAST}`)),
@@ -343,10 +367,10 @@ async function loadDashboard(){
       graphFetch(wsRange(CONTRIB_SHEET, `E${CONTRIB_FIRST}:E${CONTRIB_LAST}`)),
     ]);
 
-    // categories: name -> planned
+    // categories: name -> planned, group
     const categories = [];
     catData.values.forEach(row => {
-      if (row[0] !== "" && row[0] !== null) categories.push({ name: row[0], planned: row[1] || 0 });
+      if (row[0] !== "" && row[0] !== null) categories.push({ name: row[0], planned: row[1] || 0, group: row[5] || "Uncategorized" });
     });
 
     // aggregate actual spend per category for selected year/month, and keep the line items behind each total
@@ -376,7 +400,7 @@ async function loadDashboard(){
       const saved = Math.max(c.planned - actual, 0);
       const over = Math.max(actual - c.planned, 0);
       const pct = c.planned > 0 ? Math.min(actual / c.planned, 1.4) : (actual > 0 ? 1.4 : 0);
-      return { name: c.name, planned: c.planned, actual, saved, over, pct, transactions: detailByCat[c.name] || [] };
+      return { name: c.name, planned: c.planned, actual, saved, over, pct, group: c.group, transactions: detailByCat[c.name] || [] };
     });
 
     const pool = { husband: 0, wife: 0 };
@@ -471,43 +495,97 @@ function render(rows, monthName, year, pool){
     (overCount > 0 ? `<b>${overCount}</b> ${overCount===1?'category is':'categories are'} over its own budget.` : `Nothing is over its own budget. 🎉`);
 
   const sorted = [...rows].sort((a,b) => b.actual - a.actual || b.planned - a.planned);
+  const visible = sorted.filter(r => !(r.planned === 0 && r.actual === 0));
+
+  // Type summary strip (Needs / Obligations / Growth / Lifestyle / Uncategorized)
+  const byType = {};
+  visible.forEach(r => {
+    const type = HOUSEHOLD_GROUP_TO_TYPE[r.group] || "Uncategorized";
+    byType[type] = (byType[type] || 0) + r.actual;
+  });
+  document.getElementById('groupTypes').innerHTML = Object.keys(byType)
+    .sort((a,b) => byType[b] - byType[a])
+    .map(t => `<span class="typepill" style="background:${HH_TYPE_COLORS[t]}22; color:${HH_TYPE_COLORS[t]};">${t} · ${inr(byType[t])}</span>`)
+    .join('');
+
+  // Group categories by their assigned group
+  const byGroup = {};
+  visible.forEach(r => {
+    const g = r.group || "Uncategorized";
+    if (!byGroup[g]) byGroup[g] = [];
+    byGroup[g].push(r);
+  });
+  const groupNames = Object.keys(byGroup).sort((a,b) =>
+    byGroup[b].reduce((s,r)=>s+r.actual,0) - byGroup[a].reduce((s,r)=>s+r.actual,0));
+
   const list = document.getElementById('catList');
   list.innerHTML = "";
-  sorted.forEach((r, idx) => {
-    if (r.planned === 0 && r.actual === 0) return; // skip fully empty rows
-    const barColor = r.over > 0 ? "#FF6B6B" : (r.pct >= 0.85 ? "#F5B942" : "#3DDC97");
-    const badge = r.over > 0
-      ? `<span class="badge over">Over by ${inr(r.over)}</span>`
-      : r.actual === 0 && r.planned > 0
-        ? `<span class="badge untouched">Untouched</span>`
-        : r.saved > 0
-          ? `<span class="badge saved">Saved ${inr(r.saved)}</span>`
-          : "";
+  let globalIdx = 0;
 
-    const txRows = r.transactions.length > 0
-      ? r.transactions.map(t => `
-          <div class="txrow">
-            <span class="txdate">${serialToDisplayDate(t.date)}</span>
-            <span class="txdesc">${t.desc}</span>
-            <span class="txpaid">${t.paidBy}</span>
-            <span class="txamt">${inr(t.amount)}</span>
-          </div>`).join('')
-      : `<div class="txempty">No transactions logged in this category this month.</div>`;
+  groupNames.forEach((groupName, gIdx) => {
+    const groupRows = byGroup[groupName];
+    const groupActual = groupRows.reduce((s,r)=>s+r.actual,0);
+    const groupPlanned = groupRows.reduce((s,r)=>s+r.planned,0);
+    const type = HOUSEHOLD_GROUP_TO_TYPE[groupName] || "Uncategorized";
+    const color = HH_TYPE_COLORS[type];
 
-    const div = document.createElement('div');
-    div.className = 'catrow';
-    div.innerHTML = `
-      <div class="top clickable" data-idx="${idx}">
-        <div class="name">${r.name}${badge}</div>
-        <div class="amounts"><b>${inr(r.actual)}</b> / ${inr(r.planned)} <span class="chevron">▸</span></div>
+    const catCardsHtml = groupRows.map((r) => {
+      const idx = globalIdx++;
+      const barColor = r.over > 0 ? "#FF6B6B" : (r.pct >= 0.85 ? "#F5B942" : "#3DDC97");
+      const badge = r.over > 0
+        ? `<span class="badge over">Over by ${inr(r.over)}</span>`
+        : r.actual === 0 && r.planned > 0
+          ? `<span class="badge untouched">Untouched</span>`
+          : r.saved > 0
+            ? `<span class="badge saved">Saved ${inr(r.saved)}</span>`
+            : "";
+      const txRows = r.transactions.length > 0
+        ? r.transactions.map(t => `
+            <div class="txrow">
+              <span class="txdate">${serialToDisplayDate(t.date)}</span>
+              <span class="txdesc">${t.desc}</span>
+              <span class="txpaid">${t.paidBy}</span>
+              <span class="txamt">${inr(t.amount)}</span>
+            </div>`).join('')
+        : `<div class="txempty">No transactions logged in this category this month.</div>`;
+      return `
+        <div class="catrow">
+          <div class="top clickable" data-idx="${idx}">
+            <div class="name">${r.name}${badge}</div>
+            <div class="amounts"><b>${inr(r.actual)}</b> / ${inr(r.planned)} <span class="chevron">▸</span></div>
+          </div>
+          <div class="barbg"><div class="barfill" style="width:${Math.min(r.pct*100,100)}%; background:${barColor};"></div></div>
+          <div class="txlist" id="tx-${idx}" style="display:none;">${txRows}</div>
+        </div>`;
+    }).join('');
+
+    const groupDiv = document.createElement('div');
+    groupDiv.className = 'group';
+    groupDiv.innerHTML = `
+      <div class="grouphdr" data-target="g${gIdx}">
+        <div class="groupleft">
+          <span class="groupchevron">▸</span>
+          <span class="groupname" style="color:${color};">${groupName}</span>
+        </div>
+        <span class="groupamt">${inr(groupActual)} / ${inr(groupPlanned)}</span>
       </div>
-      <div class="barbg"><div class="barfill" style="width:${Math.min(r.pct*100,100)}%; background:${barColor};"></div></div>
-      <div class="txlist" id="tx-${idx}" style="display:none;">${txRows}</div>
+      <div class="groupitems" id="g${gIdx}">${catCardsHtml}</div>
     `;
-    list.appendChild(div);
+    list.appendChild(groupDiv);
+  });
+
+  list.querySelectorAll('.grouphdr').forEach(hdr => {
+    hdr.addEventListener('click', () => {
+      const panel = document.getElementById(hdr.dataset.target);
+      const chevron = hdr.querySelector('.groupchevron');
+      const open = panel.style.display === 'block';
+      panel.style.display = open ? 'none' : 'block';
+      chevron.textContent = open ? '▸' : '▾';
+    });
   });
   list.querySelectorAll('.top.clickable').forEach(el => {
-    el.addEventListener('click', () => {
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
       const idx = el.dataset.idx;
       const panel = document.getElementById('tx-' + idx);
       const chevron = el.querySelector('.chevron');

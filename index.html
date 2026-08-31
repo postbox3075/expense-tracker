@@ -292,6 +292,8 @@
         <form id="catAddForm">
           <label>New Category Name</label>
           <input type="text" id="cat_newName" required />
+          <label>Group</label>
+          <select id="cat_newGroup" required></select>
           <label>Planned Amount (Rs)</label>
           <input type="number" id="cat_newAmount" min="0" step="1" required />
           <label>Notes</label>
@@ -302,11 +304,13 @@
         <form id="catUpdateForm" style="display:none;">
           <label>Category</label>
           <select id="cat_pick" required></select>
+          <label>Group</label>
+          <select id="cat_newGroupEdit" required></select>
           <label>New Planned Amount (Rs)</label>
           <input type="number" id="cat_newPlan" min="0" step="1" required />
           <label>Reason for change</label>
           <input type="text" id="cat_reason" placeholder="optional" />
-          <button type="submit" class="btn-primary" style="background:var(--slate);">Update Amount</button>
+          <button type="submit" class="btn-primary" style="background:var(--slate);">Update Category</button>
         </form>
       </div>
     </div>
@@ -337,6 +341,9 @@ const SALCAT_FIRST = 4, SALCAT_LAST = 43;    // Salary Category Master data rows
 const SALARY_GROUPS = ["Family Support / Obligations","EMIs / Interest","Transport & Travel",
   "Utilities & Bills","Household & Living Expenses","Investments / Growth",
   "Personal Expenses","Work / One-time Expenses","Uncategorized"];
+const HOUSEHOLD_GROUPS = ["Food & Groceries","Utilities & Bills","Transport & Travel","Education & Kids",
+  "Health & Personal Care","Family & Social","Household Help","Shopping & Misc",
+  "Savings & Investment","Uncategorized"];
 const EXP_FIRST = 5, EXP_LAST = 8004;        // Expense Log data rows
 const SAL_RECV_FIRST = 4, SAL_RECV_LAST = 400;   // Salary Received Log data rows
 const SAL_SPEND_FIRST = 4, SAL_SPEND_LAST = 2000; // Salary Spend Log data rows (line-item granularity)
@@ -431,6 +438,10 @@ async function init(){
   SALARY_GROUPS.forEach(g => {
     document.getElementById('salcat_newGroup').appendChild(new Option(g, g));
     document.getElementById('salcat_newGroupEdit').appendChild(new Option(g, g));
+  });
+  HOUSEHOLD_GROUPS.forEach(g => {
+    document.getElementById('cat_newGroup').appendChild(new Option(g, g));
+    document.getElementById('cat_newGroupEdit').appendChild(new Option(g, g));
   });
 
   const t = todayParts();
@@ -546,13 +557,19 @@ function wsRange(sheet, addr){
 }
 
 /* ---------- Categories (shared) ---------- */
+let categoryGroups = {};
 async function loadCategories(){
-  const data = await graphFetch(wsRange(CATEGORY_SHEET, `B${CAT_FIRST}:C${CAT_LAST}`));
+  const data = await graphFetch(wsRange(CATEGORY_SHEET, `B${CAT_FIRST}:G${CAT_LAST}`));
   categoryPlans = {};
+  categoryGroups = {};
   const names = [];
   data.values.forEach(row => {
     const name = row[0];
-    if (name !== "" && name !== null){ categoryPlans[name] = row[1] || 0; names.push(name); }
+    if (name !== "" && name !== null){
+      categoryPlans[name] = row[1] || 0;
+      categoryGroups[name] = row[5] || "Uncategorized";
+      names.push(name);
+    }
   });
   const expSel = document.getElementById('e_category');
   const catSel = document.getElementById('cat_pick');
@@ -750,14 +767,15 @@ async function onCatAddSubmit(e){
   btn.disabled = true; showStatus("Adding category…", "busy");
   try{
     const name = document.getElementById('cat_newName').value.trim();
+    const group = document.getElementById('cat_newGroup').value;
     const amount = parseFloat(document.getElementById('cat_newAmount').value);
     const notes = document.getElementById('cat_newNotes').value.trim();
     if (!name || isNaN(amount)) throw new Error("Enter a name and a valid amount.");
     const t = todayParts();
 
     const row = await findNextEmptyRow(CATEGORY_SHEET, 'B', CAT_FIRST, CAT_LAST);
-    await graphFetch(wsRange(CATEGORY_SHEET, `A${row}:F${row}`), { method:"PATCH",
-      body: JSON.stringify({ values: [[row - 3, name, amount, "Yes", t.serial, notes]] }) });
+    await graphFetch(wsRange(CATEGORY_SHEET, `A${row}:G${row}`), { method:"PATCH",
+      body: JSON.stringify({ values: [[row - 3, name, amount, "Yes", t.serial, notes, group]] }) });
 
     showStatus(`Category "${name}" added ✅`, "ok");
     e.target.reset();
@@ -772,6 +790,7 @@ async function onCatUpdateSubmit(e){
   btn.disabled = true; showStatus("Updating category…", "busy");
   try{
     const name = document.getElementById('cat_pick').value;
+    const newGroup = document.getElementById('cat_newGroupEdit').value;
     const newPlan = parseFloat(document.getElementById('cat_newPlan').value);
     const reason = document.getElementById('cat_reason').value.trim();
     if (!name || isNaN(newPlan)) throw new Error("Pick a category and enter a valid amount.");
@@ -787,6 +806,8 @@ async function onCatUpdateSubmit(e){
 
     await graphFetch(wsRange(CATEGORY_SHEET, `C${targetRow}`), { method:"PATCH",
       body: JSON.stringify({ values: [[newPlan]] }) });
+    await graphFetch(wsRange(CATEGORY_SHEET, `G${targetRow}`), { method:"PATCH",
+      body: JSON.stringify({ values: [[newGroup]] }) });
 
     // append to change log
     const t = todayParts();
