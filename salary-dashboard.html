@@ -135,6 +135,7 @@
         <div class="pstat"><span class="l">Spent</span><span class="v" id="hSpent">Rs 0</span></div>
         <div class="pstat"><span class="l">Remaining</span><span class="v" id="hRemain">Rs 0</span></div>
         <div class="barbg"><div class="barfill" id="hBar" style="width:0%; background:var(--husband);"></div></div>
+        <div id="hTypes" class="typerow"></div>
         <div class="itemtitle">By group — tap to expand</div>
         <div id="hItems"></div>
       </div>
@@ -146,6 +147,7 @@
         <div class="pstat"><span class="l">Spent</span><span class="v" id="wSpent">Rs 0</span></div>
         <div class="pstat"><span class="l">Remaining</span><span class="v" id="wRemain">Rs 0</span></div>
         <div class="barbg"><div class="barfill" id="wBar" style="width:0%; background:var(--wife);"></div></div>
+        <div id="wTypes" class="typerow"></div>
         <div class="itemtitle">By group — tap to expand</div>
         <div id="wItems"></div>
       </div>
@@ -167,10 +169,21 @@ const SALARY_SPEND_SHEET    = "Salary Spend Log";
 const SALARY_CAT_SHEET      = "Salary Category Master";
 const SAL_RECV_FIRST = 4, SAL_RECV_LAST = 400;
 const SAL_SPEND_FIRST = 4, SAL_SPEND_LAST = 2000;
-const SALCAT_FIRST = 4, SALCAT_LAST = 70;
-const GROUP_COLORS = {
-  "Suganya": "#5AA9E6", "Mom": "#F5B942", "Murali": "#3DDC97",
-  "SG Expenses": "#E8A0C4", "Uncategorized": "#8CA3C2"
+const SALCAT_FIRST = 4, SALCAT_LAST = 43;
+const GROUP_TO_TYPE = {
+  "Family Support / Obligations": "Obligations",
+  "EMIs / Interest": "Obligations",
+  "Transport & Travel": "Needs",
+  "Utilities & Bills": "Needs",
+  "Household & Living Expenses": "Needs",
+  "Investments / Growth": "Growth",
+  "Personal Expenses": "Lifestyle",
+  "Work / One-time Expenses": "One-time",
+  "Uncategorized": "Uncategorized"
+};
+const TYPE_COLORS = {
+  "Needs": "#5AA9E6", "Obligations": "#F5B942", "Growth": "#3DDC97",
+  "Lifestyle": "#E8A0C4", "One-time": "#FF6B6B", "Uncategorized": "#8CA3C2"
 };
 /* ===================================================================== */
 
@@ -358,6 +371,7 @@ function renderPerson(prefix, monthName, year, receivedAmt, itemList){
   const wrap = document.getElementById(prefix + 'Items');
   if (itemList.length === 0){
     wrap.innerHTML = `<div class="empty">Nothing logged for ${monthName} ${year} yet.</div>`;
+    document.getElementById(prefix + 'Types').innerHTML = '';
     return;
   }
 
@@ -370,10 +384,23 @@ function renderPerson(prefix, monthName, year, receivedAmt, itemList){
   const groupNames = Object.keys(byGroup).sort((a,b) =>
     byGroup[b].reduce((s,i)=>s+i.amount,0) - byGroup[a].reduce((s,i)=>s+i.amount,0));
 
+  // Type summary strip (Needs / Obligations / Growth / Lifestyle / One-time / Uncategorized)
+  const byType = {};
+  itemList.forEach(it => {
+    const type = GROUP_TO_TYPE[it.group] || "Uncategorized";
+    byType[type] = (byType[type] || 0) + it.amount;
+  });
+  const typeWrap = document.getElementById(prefix + 'Types');
+  typeWrap.innerHTML = Object.keys(byType)
+    .sort((a,b) => byType[b] - byType[a])
+    .map(t => `<span class="typepill" style="background:${TYPE_COLORS[t]}22; color:${TYPE_COLORS[t]};">${t} · ${inr(byType[t])}</span>`)
+    .join('');
+
   wrap.innerHTML = groupNames.map((g, idx) => {
     const groupItems = byGroup[g];
     const groupTotal = groupItems.reduce((s,i)=>s+i.amount,0);
-    const color = GROUP_COLORS[g] || GROUP_COLORS["Uncategorized"];
+    const type = GROUP_TO_TYPE[g] || "Uncategorized";
+    const color = TYPE_COLORS[type];
     const itemsHtml = groupItems.map(i => `
       <div class="item">
         <span class="idate">${serialToDisplayDate(i.date)}</span>

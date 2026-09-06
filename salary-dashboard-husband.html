@@ -16,7 +16,6 @@
   body{margin:0; background:var(--navy); color:var(--ink); font-family:'Segoe UI', Arial, Helvetica, sans-serif; -webkit-font-smoothing:antialiased;}
   .wrap{max-width:640px; margin:0 auto; padding:20px 16px 60px;}
 
-  /* --- Password gate --- */
   #gate{position:fixed; inset:0; background:var(--navy); display:flex; align-items:center; justify-content:center; padding:20px; z-index:100;}
   #gateCard{background:var(--panel); border-radius:16px; padding:32px 28px; max-width:340px; width:100%; text-align:center;}
   #gateCard .lock{font-size:36px; margin-bottom:10px;}
@@ -26,30 +25,45 @@
   #gateBtn{width:100%; padding:12px; border:none; border-radius:10px; background:var(--gold); color:#2A2100; font-weight:bold; font-size:14px; cursor:pointer;}
   #gateErr{color:var(--red); font-size:12.5px; margin-top:10px; display:none;}
 
-  header{display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px; margin-bottom:20px;}
+  header{display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px; margin-bottom:16px;}
   header .title{font-size:22px; font-weight:800; letter-spacing:-0.02em;}
   header .title span{color:var(--gold);}
   header .sub{color:var(--muted); font-size:13px; margin-top:2px;}
   .userbox{font-size:12px; color:var(--muted); text-align:right;}
   .userbox button{background:none; border:none; color:var(--blue); text-decoration:underline; cursor:pointer; font-size:12px; padding:0;}
 
+  .tabbar{display:flex; gap:6px; margin-bottom:18px; overflow-x:auto;}
+  .tabbtn{flex:0 0 auto; padding:9px 16px; border-radius:20px; border:1px solid var(--line); background:var(--panel); color:var(--muted); font-size:13px; font-weight:bold; cursor:pointer; white-space:nowrap;}
+  .tabbtn.active{background:var(--gold); color:#2A2100; border-color:var(--gold);}
+  .tabpanel{display:none;}
+  .tabpanel.active{display:block;}
+
   .controls{display:flex; gap:10px; align-items:center; margin-bottom:20px; flex-wrap:wrap;}
-  select, .refreshBtn{background:var(--panel); border:1px solid var(--line); color:var(--ink); border-radius:10px; padding:9px 14px; font-size:14px; font-family:inherit;}
-  .refreshBtn{cursor:pointer; font-weight:bold; color:var(--gold); border-color:var(--gold);}
+  select, input, .refreshBtn{background:var(--panel2); border:1px solid var(--line); color:var(--ink); border-radius:10px; padding:9px 14px; font-size:14px; font-family:inherit; width:100%;}
+  select{width:auto;}
+  .refreshBtn{cursor:pointer; font-weight:bold; color:var(--gold); border-color:var(--gold); width:auto;}
   .refreshBtn:disabled{opacity:.5; cursor:default;}
+  label{display:block; font-size:13px; font-weight:bold; margin:14px 0 5px;}
+  label:first-of-type{margin-top:0;}
+  button.primary{width:100%; padding:13px; border:none; border-radius:10px; font-size:15px; font-weight:bold; cursor:pointer; margin-top:18px; background:var(--gold); color:#2A2100;}
+  .radiogroup{display:flex; gap:8px; margin-top:4px;}
+  .radiogroup label{flex:1; margin:0; font-weight:normal; text-align:center; padding:10px 6px; border:1px solid var(--line); border-radius:8px; cursor:pointer; font-size:13px; background:var(--panel2);}
+  .radiogroup input{display:none;}
+  .radiogroup label:has(input:checked){border-color:var(--gold); background:var(--gold); color:#2A2100; font-weight:bold;}
+  .hint{font-size:12px; color:var(--muted); margin-top:4px;}
 
   #signedOutCard{background:var(--panel); border-radius:16px; padding:28px; text-align:center;}
   #signedOutCard button{margin-top:14px; background:var(--gold); color:#2A2100; border:none; border-radius:10px; padding:12px 22px; font-weight:bold; font-size:14px; cursor:pointer;}
 
   #dash{display:none;}
+  .card{background:var(--panel); border-radius:16px; padding:20px; margin-bottom:16px;}
 
-  .pstat{display:flex; justify-content:space-between; padding:12px 0; border-bottom:1px solid var(--line); font-size:15px;}
+  .pstat{display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--line); font-size:14px;}
   .pstat:last-of-type{border-bottom:none;}
   .pstat .l{color:var(--muted);}
   .pstat .v{font-weight:bold;}
   .pstat .v.pos{color:var(--green);}
   .pstat .v.neg{color:var(--red);}
-  .card{background:var(--panel); border-radius:16px; padding:20px; margin-bottom:16px;}
 
   .barbg{height:8px; border-radius:5px; background:var(--line); overflow:hidden; margin:14px 0 6px;}
   .barfill{height:100%; border-radius:5px; transition:width .4s ease;}
@@ -72,8 +86,14 @@
   .groupamt{font-size:13.5px; font-weight:bold; white-space:nowrap;}
   .groupitems{display:none; padding:2px 14px 10px;}
 
+  .minilist{max-height:220px; overflow-y:auto; border:1px solid var(--line); border-radius:8px; margin-bottom:16px;}
+  .minilist .mlrow{display:flex; justify-content:space-between; gap:10px; padding:8px 12px; font-size:13px; border-bottom:1px solid var(--line);}
+  .minilist .mlrow:last-child{border-bottom:none;}
+  .minilist .mlempty{padding:12px; font-size:13px; color:var(--muted);}
+
   #status{font-size:13px; margin-top:16px; padding:10px 14px; border-radius:10px; display:none;}
   #status.busy{display:block; background:var(--panel2); color:var(--blue);}
+  #status.ok{display:block; background:rgba(61,220,151,.12); color:var(--green);}
   #status.err{display:block; background:rgba(255,107,107,.12); color:var(--red);}
   .config-warning{background:#3A2E10; color:#F5B942; padding:14px; border-radius:10px; font-size:13px; margin-bottom:16px;}
 </style>
@@ -96,7 +116,7 @@
   <header>
     <div>
       <div class="title">🔒 Private <span>Salary View</span></div>
-      <div class="sub">Husband only — full breakdown, by group</div>
+      <div class="sub">Standalone — its own categories, its own log</div>
     </div>
     <div class="userbox" id="userbox" style="display:none;">
       <div id="userLabel"></div>
@@ -114,22 +134,88 @@
   </div>
 
   <div id="dash">
-    <div class="controls">
-      <select id="monthSel"></select>
-      <select id="yearSel"></select>
-      <button class="refreshBtn" id="refreshBtn">↻ Refresh</button>
+    <div class="tabbar">
+      <button class="tabbtn active" data-tab="view">View</button>
+      <button class="tabbtn" data-tab="add">Add Expense</button>
+      <button class="tabbtn" data-tab="cats">Categories</button>
     </div>
 
-    <div class="card">
-      <div class="sub" id="monthLabel">—</div>
-      <div class="pstat"><span class="l">Received</span><span class="v" id="received">Rs 0</span></div>
-      <div class="pstat"><span class="l">Spent</span><span class="v" id="spent">Rs 0</span></div>
-      <div class="pstat"><span class="l">Remaining</span><span class="v" id="remain">Rs 0</span></div>
-      <div class="barbg"><div class="barfill" id="bar" style="width:0%; background:var(--blue);"></div></div>
+    <div class="tabpanel active" id="tab-view">
+      <div class="controls">
+        <select id="monthSel"></select>
+        <select id="yearSel"></select>
+        <button class="refreshBtn" id="refreshBtn">↻ Refresh</button>
+      </div>
+
+      <div class="card">
+        <div class="sub" id="monthLabel">—</div>
+        <div class="pstat"><span class="l">Received</span><span class="v" id="received">Rs 0</span></div>
+        <div class="pstat"><span class="l">Spent</span><span class="v" id="spent">Rs 0</span></div>
+        <div class="pstat"><span class="l">Remaining</span><span class="v" id="remain">Rs 0</span></div>
+        <div class="barbg"><div class="barfill" id="bar" style="width:0%; background:var(--blue);"></div></div>
+      </div>
+
+      <div class="itemtitle">By group — tap to expand</div>
+      <div id="items"></div>
     </div>
 
-    <div class="itemtitle">By group — tap to expand</div>
-    <div id="items"></div>
+    <div class="tabpanel" id="tab-add">
+      <div class="card">
+        <form id="addForm">
+          <label>Date</label>
+          <input type="date" id="a_date" required />
+          <label>Category</label>
+          <select id="a_category" required><option value="">Loading…</option></select>
+          <label>Amount (Rs)</label>
+          <input type="number" id="a_amount" min="0" step="1" required />
+          <label>Notes</label>
+          <input type="text" id="a_notes" placeholder="optional" />
+          <button type="submit" class="primary">Save Expense</button>
+        </form>
+      </div>
+    </div>
+
+    <div class="tabpanel" id="tab-cats">
+      <div class="card">
+        <p class="hint" style="margin:0 0 6px;">Current categories</p>
+        <div id="catListView" class="minilist"></div>
+
+        <div class="radiogroup" style="margin-bottom:14px;">
+          <label><input type="radio" name="catMode" value="add" checked /><span>Add new</span></label>
+          <label><input type="radio" name="catMode" value="update" /><span>Update amount</span></label>
+          <label><input type="radio" name="catMode" value="remove" /><span>Remove</span></label>
+        </div>
+
+        <form id="catAddForm">
+          <label>New Category Name</label>
+          <input type="text" id="cat_newName" required />
+          <label>Group</label>
+          <select id="cat_newGroup" required></select>
+          <label>Reference Amount (Rs)</label>
+          <input type="number" id="cat_newAmount" min="0" step="1" required />
+          <label>Notes</label>
+          <input type="text" id="cat_newNotes" placeholder="optional" />
+          <button type="submit" class="primary">Add Category</button>
+        </form>
+
+        <form id="catUpdateForm" style="display:none;">
+          <label>Category</label>
+          <select id="cat_pick" required></select>
+          <label>Group</label>
+          <select id="cat_newGroupEdit" required></select>
+          <label>New Reference Amount (Rs)</label>
+          <input type="number" id="cat_newPlan" min="0" step="1" required />
+          <button type="submit" class="primary">Update Category</button>
+        </form>
+
+        <form id="catRemoveForm" style="display:none;">
+          <label>Category to remove</label>
+          <select id="cat_removePick" required></select>
+          <p class="hint">Removes it from the list. Past entries already using this name are unaffected.</p>
+          <button type="submit" class="primary" style="background:var(--red); color:#fff;">Remove Category</button>
+        </form>
+      </div>
+    </div>
 
     <div id="status"></div>
   </div>
@@ -137,26 +223,22 @@
 </div>
 
 <script>
-/* =====================================================================
-   CONFIGURE, THEN COMMIT
-   ===================================================================== */
-const PAGE_PASSWORD = "W0rld!sN0tEn0ugh"; // <-- set your own password here before deploying
+const PAGE_PASSWORD = "W0rld!sN0tEn0ugh";
 const CLIENT_ID = "66b07780-e164-4438-a80f-224ff11391fc";
 const FILE_PATH = "/Family_Expense_Tracker_v15_Fixed.xlsm";
 const SALARY_RECEIVED_SHEET = "Salary Received Log";
-const SALARY_SPEND_SHEET    = "Salary Spend Log";
-const SALARY_CAT_SHEET      = "Salary Category Master";
+const PRIVATE_CAT_SHEET     = "Private Category Master";
+const PRIVATE_SPEND_SHEET   = "Private Spend Log";
 const SAL_RECV_FIRST = 4, SAL_RECV_LAST = 400;
-const SAL_SPEND_FIRST = 4, SAL_SPEND_LAST = 2000;
-const SALCAT_FIRST = 4, SALCAT_LAST = 70;
+const PCAT_FIRST = 4, PCAT_LAST = 83;
+const PSPEND_FIRST = 4, PSPEND_LAST = 2000;
+const GROUPS = ["Suganya", "Mom", "Murali", "SG Expenses", "Uncategorized"];
 const GROUP_COLORS = {
   "Suganya": "#5AA9E6", "Mom": "#F5B942", "Murali": "#3DDC97",
   "SG Expenses": "#E8A0C4", "Uncategorized": "#8CA3C2"
 };
-const PERSON = "Husband"; // this page only ever shows this person's data
-/* ===================================================================== */
+const PERSON = "Husband";
 
-// Hardcoded on purpose — see index.html for why (avoids URL-variant mismatches with Azure).
 const REDIRECT_URI = "https://postbox3075.github.io/expense-tracker/salary-dashboard-husband.html";
 const msalConfig = {
   auth: { clientId: CLIENT_ID, authority: "https://login.microsoftonline.com/consumers", redirectUri: REDIRECT_URI },
@@ -167,6 +249,7 @@ const GRAPH_BASE = "https://graph.microsoft.com/v1.0";
 const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 
 let msalInstance, fileItemId = null;
+let categoryGroups = {};
 
 function inr(n){ return "Rs " + Math.round(n).toLocaleString('en-IN'); }
 function showStatus(msg, kind){
@@ -181,8 +264,12 @@ function serialToDisplayDate(serial){
   const d = new Date(epoch + serial * 86400000);
   return `${String(d.getUTCDate()).padStart(2,'0')}-${DMONTHS[d.getUTCMonth()]}`;
 }
+function excelSerialDate(jsDate){
+  const epoch = Date.UTC(1899, 11, 30);
+  const ms = Date.UTC(jsDate.getFullYear(), jsDate.getMonth(), jsDate.getDate());
+  return Math.round((ms - epoch) / 86400000);
+}
 
-/* ---------- Password gate ---------- */
 document.getElementById('gateBtn').addEventListener('click', tryUnlock);
 document.getElementById('gatePass').addEventListener('keydown', (e) => { if (e.key === 'Enter') tryUnlock(); });
 function tryUnlock(){
@@ -197,6 +284,19 @@ function tryUnlock(){
   }
 }
 
+document.querySelector('.tabbar').addEventListener('click', (e) => {
+  const btn = e.target.closest('.tabbtn');
+  if (!btn) return;
+  document.querySelectorAll('.tabbtn').forEach(b => b.classList.toggle('active', b === btn));
+  document.querySelectorAll('.tabpanel').forEach(p => p.classList.toggle('active', p.id === 'tab-' + btn.dataset.tab));
+});
+document.querySelectorAll('input[name=catMode]').forEach(r => r.addEventListener('change', () => {
+  const mode = document.querySelector('input[name=catMode]:checked').value;
+  document.getElementById('catAddForm').style.display = mode === 'add' ? 'block' : 'none';
+  document.getElementById('catUpdateForm').style.display = mode === 'update' ? 'block' : 'none';
+  document.getElementById('catRemoveForm').style.display = mode === 'remove' ? 'block' : 'none';
+}));
+
 async function init(){
   if (CLIENT_ID.startsWith("PASTE-") || !FILE_PATH){
     document.getElementById('configWarning').style.display = 'block';
@@ -208,6 +308,11 @@ async function init(){
   for (let y = thisYear - 2; y <= thisYear + 3; y++) yearSel.appendChild(new Option(y, y));
   monthSel.value = new Date().getMonth();
   yearSel.value = thisYear;
+  document.getElementById('a_date').valueAsDate = new Date();
+  GROUPS.forEach(g => {
+    document.getElementById('cat_newGroup').appendChild(new Option(g, g));
+    document.getElementById('cat_newGroupEdit').appendChild(new Option(g, g));
+  });
 
   msalInstance = new msal.PublicClientApplication(msalConfig);
   await msalInstance.initialize();
@@ -218,9 +323,13 @@ async function init(){
   }
   document.getElementById('loginBtn').addEventListener('click', doLogin);
   document.getElementById('logoutBtn').addEventListener('click', () => msalInstance.logoutPopup());
-  document.getElementById('refreshBtn').addEventListener('click', loadData);
-  monthSel.addEventListener('change', loadData);
-  yearSel.addEventListener('change', loadData);
+  document.getElementById('refreshBtn').addEventListener('click', loadDashboard);
+  monthSel.addEventListener('change', loadDashboard);
+  yearSel.addEventListener('change', loadDashboard);
+  document.getElementById('addForm').addEventListener('submit', onAddSubmit);
+  document.getElementById('catAddForm').addEventListener('submit', onCatAddSubmit);
+  document.getElementById('catUpdateForm').addEventListener('submit', onCatUpdateSubmit);
+  document.getElementById('catRemoveForm').addEventListener('submit', onCatRemoveSubmit);
 }
 
 async function doLogin(){
@@ -236,7 +345,15 @@ async function onSignedIn(account){
   document.getElementById('dash').style.display = 'block';
   document.getElementById('userbox').style.display = 'block';
   document.getElementById('userLabel').textContent = account.username;
-  await loadData();
+  showStatus("Connecting…", "busy");
+  try{
+    await resolveFile();
+    await loadCategories();
+    await loadDashboard();
+    showStatus("Connected.", "ok");
+  } catch(e){
+    showStatus("Could not connect: " + e.message, "err");
+  }
 }
 
 async function getToken(){
@@ -267,8 +384,130 @@ async function resolveFile(){
   const data = await graphFetch(`/me/drive/root:${encodedPath}`);
   fileItemId = data.id;
 }
+async function findNextEmptyRow(sheet, col, first, last){
+  const data = await graphFetch(wsRange(sheet, `${col}${first}:${col}${last}`));
+  for (let i = 0; i < data.values.length; i++){
+    if (data.values[i][0] === "" || data.values[i][0] === null) return first + i;
+  }
+  throw new Error(`${sheet} is full — extend it before adding more.`);
+}
 
-async function loadData(){
+async function loadCategories(){
+  const data = await graphFetch(wsRange(PRIVATE_CAT_SHEET, `B${PCAT_FIRST}:G${PCAT_LAST}`));
+  categoryGroups = {};
+  const names = [];
+  const plans = {};
+  data.values.forEach(row => {
+    const name = row[0], amt = row[1], active = row[2], group = row[5];
+    if (name !== "" && name !== null && active !== "No"){
+      categoryGroups[name] = group || "Uncategorized";
+      plans[name] = amt || 0;
+      names.push(name);
+    }
+  });
+  const aSel = document.getElementById('a_category');
+  const pickSel = document.getElementById('cat_pick');
+  const removeSel = document.getElementById('cat_removePick');
+  aSel.innerHTML = ""; pickSel.innerHTML = ""; removeSel.innerHTML = "";
+  names.forEach(n => {
+    aSel.appendChild(new Option(n, n));
+    pickSel.appendChild(new Option(n, n));
+    removeSel.appendChild(new Option(n, n));
+  });
+  const listEl = document.getElementById('catListView');
+  listEl.innerHTML = names.length === 0
+    ? `<div class="mlempty">Nothing here yet.</div>`
+    : names.map(n => `<div class="mlrow"><span>${n}</span><span style="color:var(--muted);">Rs ${(plans[n]||0).toLocaleString('en-IN')}</span></div>`).join('');
+}
+
+async function onCatAddSubmit(e){
+  e.preventDefault();
+  const btn = e.target.querySelector('button');
+  btn.disabled = true; showStatus("Adding category…", "busy");
+  try{
+    const name = document.getElementById('cat_newName').value.trim();
+    const group = document.getElementById('cat_newGroup').value;
+    const amount = parseFloat(document.getElementById('cat_newAmount').value);
+    const notes = document.getElementById('cat_newNotes').value.trim();
+    if (!name || isNaN(amount)) throw new Error("Enter a name and a valid amount.");
+    const row = await findNextEmptyRow(PRIVATE_CAT_SHEET, 'B', PCAT_FIRST, PCAT_LAST);
+    await graphFetch(wsRange(PRIVATE_CAT_SHEET, `A${row}:G${row}`), { method:"PATCH",
+      body: JSON.stringify({ values: [[row - 3, name, amount, "Yes", excelSerialDate(new Date()), notes, group]] }) });
+    showStatus(`"${name}" added ✅`, "ok");
+    e.target.reset();
+    await loadCategories();
+  } catch(err){ showStatus("Error: " + err.message, "err"); }
+  finally { btn.disabled = false; }
+}
+
+async function onCatUpdateSubmit(e){
+  e.preventDefault();
+  const btn = e.target.querySelector('button');
+  btn.disabled = true; showStatus("Updating category…", "busy");
+  try{
+    const name = document.getElementById('cat_pick').value;
+    const newGroup = document.getElementById('cat_newGroupEdit').value;
+    const newAmt = parseFloat(document.getElementById('cat_newPlan').value);
+    if (!name || isNaN(newAmt)) throw new Error("Pick a category and enter a valid amount.");
+    const data = await graphFetch(wsRange(PRIVATE_CAT_SHEET, `B${PCAT_FIRST}:B${PCAT_LAST}`));
+    let targetRow = null;
+    for (let i = 0; i < data.values.length; i++){
+      if (data.values[i][0] === name){ targetRow = PCAT_FIRST + i; break; }
+    }
+    if (!targetRow) throw new Error("Category not found.");
+    await graphFetch(wsRange(PRIVATE_CAT_SHEET, `C${targetRow}`), { method:"PATCH", body: JSON.stringify({ values: [[newAmt]] }) });
+    await graphFetch(wsRange(PRIVATE_CAT_SHEET, `G${targetRow}`), { method:"PATCH", body: JSON.stringify({ values: [[newGroup]] }) });
+    showStatus(`${name} updated ✅`, "ok");
+    e.target.reset();
+    await loadCategories();
+  } catch(err){ showStatus("Error: " + err.message, "err"); }
+  finally { btn.disabled = false; }
+}
+
+async function onCatRemoveSubmit(e){
+  e.preventDefault();
+  const btn = e.target.querySelector('button');
+  btn.disabled = true; showStatus("Removing category…", "busy");
+  try{
+    const name = document.getElementById('cat_removePick').value;
+    if (!name) throw new Error("Pick a category to remove.");
+    const data = await graphFetch(wsRange(PRIVATE_CAT_SHEET, `B${PCAT_FIRST}:B${PCAT_LAST}`));
+    let targetRow = null;
+    for (let i = 0; i < data.values.length; i++){
+      if (data.values[i][0] === name){ targetRow = PCAT_FIRST + i; break; }
+    }
+    if (!targetRow) throw new Error("Category not found.");
+    await graphFetch(wsRange(PRIVATE_CAT_SHEET, `A${targetRow}:G${targetRow}`), { method:"PATCH",
+      body: JSON.stringify({ values: [["", "", "", "", "", "", ""]] }) });
+    showStatus(`"${name}" removed ✅`, "ok");
+    await loadCategories();
+  } catch(err){ showStatus("Error: " + err.message, "err"); }
+  finally { btn.disabled = false; }
+}
+
+async function onAddSubmit(e){
+  e.preventDefault();
+  const btn = e.target.querySelector('button');
+  btn.disabled = true; showStatus("Saving…", "busy");
+  try{
+    const dateVal = document.getElementById('a_date').valueAsDate;
+    const category = document.getElementById('a_category').value;
+    const amount = parseFloat(document.getElementById('a_amount').value);
+    const notes = document.getElementById('a_notes').value.trim();
+    if (!dateVal || !category || isNaN(amount)) throw new Error("Fill in date, category and amount.");
+    const year = dateVal.getFullYear(), month = MONTH_NAMES[dateVal.getMonth()];
+    const dateSerial = excelSerialDate(dateVal);
+    const row = await findNextEmptyRow(PRIVATE_SPEND_SHEET, 'A', PSPEND_FIRST, PSPEND_LAST);
+    await graphFetch(wsRange(PRIVATE_SPEND_SHEET, `A${row}:F${row}`), { method:"PATCH",
+      body: JSON.stringify({ values: [[dateSerial, month, year, category, amount, notes]] }) });
+    showStatus(`Saved: ${category} — ${inr(amount)} ✅`, "ok");
+    e.target.reset();
+    document.getElementById('a_date').valueAsDate = new Date();
+  } catch(err){ showStatus("Error: " + err.message, "err"); }
+  finally { btn.disabled = false; }
+}
+
+async function loadDashboard(){
   const btn = document.getElementById('refreshBtn');
   btn.disabled = true;
   showStatus("Loading…", "busy");
@@ -278,30 +517,19 @@ async function loadData(){
     const selMonth = MONTH_NAMES[selMonthIdx];
     const selYear = parseInt(document.getElementById('yearSel').value, 10);
 
-    const [rDate, rMonth, rYear, rPerson, rAmount,
-           sDate, sMonth, sYear, sPerson, sDesc, sAmount, sNotes,
-           catNames, catGroups] = await Promise.all([
-      graphFetch(wsRange(SALARY_RECEIVED_SHEET, `A${SAL_RECV_FIRST}:A${SAL_RECV_LAST}`)),
+    const [rMonth, rYear, rPerson, rAmount,
+           sDate, sMonth, sYear, sCat, sAmount, sNotes] = await Promise.all([
       graphFetch(wsRange(SALARY_RECEIVED_SHEET, `B${SAL_RECV_FIRST}:B${SAL_RECV_LAST}`)),
       graphFetch(wsRange(SALARY_RECEIVED_SHEET, `C${SAL_RECV_FIRST}:C${SAL_RECV_LAST}`)),
       graphFetch(wsRange(SALARY_RECEIVED_SHEET, `D${SAL_RECV_FIRST}:D${SAL_RECV_LAST}`)),
       graphFetch(wsRange(SALARY_RECEIVED_SHEET, `E${SAL_RECV_FIRST}:E${SAL_RECV_LAST}`)),
-      graphFetch(wsRange(SALARY_SPEND_SHEET, `A${SAL_SPEND_FIRST}:A${SAL_SPEND_LAST}`)),
-      graphFetch(wsRange(SALARY_SPEND_SHEET, `B${SAL_SPEND_FIRST}:B${SAL_SPEND_LAST}`)),
-      graphFetch(wsRange(SALARY_SPEND_SHEET, `C${SAL_SPEND_FIRST}:C${SAL_SPEND_LAST}`)),
-      graphFetch(wsRange(SALARY_SPEND_SHEET, `D${SAL_SPEND_FIRST}:D${SAL_SPEND_LAST}`)),
-      graphFetch(wsRange(SALARY_SPEND_SHEET, `E${SAL_SPEND_FIRST}:E${SAL_SPEND_LAST}`)),
-      graphFetch(wsRange(SALARY_SPEND_SHEET, `F${SAL_SPEND_FIRST}:F${SAL_SPEND_LAST}`)),
-      graphFetch(wsRange(SALARY_SPEND_SHEET, `G${SAL_SPEND_FIRST}:G${SAL_SPEND_LAST}`)),
-      graphFetch(wsRange(SALARY_CAT_SHEET, `B${SALCAT_FIRST}:B${SALCAT_LAST}`)),
-      graphFetch(wsRange(SALARY_CAT_SHEET, `G${SALCAT_FIRST}:G${SALCAT_LAST}`)),
+      graphFetch(wsRange(PRIVATE_SPEND_SHEET, `A${PSPEND_FIRST}:A${PSPEND_LAST}`)),
+      graphFetch(wsRange(PRIVATE_SPEND_SHEET, `B${PSPEND_FIRST}:B${PSPEND_LAST}`)),
+      graphFetch(wsRange(PRIVATE_SPEND_SHEET, `C${PSPEND_FIRST}:C${PSPEND_LAST}`)),
+      graphFetch(wsRange(PRIVATE_SPEND_SHEET, `D${PSPEND_FIRST}:D${PSPEND_LAST}`)),
+      graphFetch(wsRange(PRIVATE_SPEND_SHEET, `E${PSPEND_FIRST}:E${PSPEND_LAST}`)),
+      graphFetch(wsRange(PRIVATE_SPEND_SHEET, `F${PSPEND_FIRST}:F${PSPEND_LAST}`)),
     ]);
-
-    const categoryToGroup = {};
-    for (let i = 0; i < catNames.values.length; i++){
-      const n = catNames.values[i][0];
-      if (n) categoryToGroup[n] = catGroups.values[i][0] || "Uncategorized";
-    }
 
     let received = 0;
     for (let i = 0; i < rYear.values.length; i++){
@@ -312,14 +540,14 @@ async function loadData(){
 
     const items = [];
     for (let i = 0; i < sYear.values.length; i++){
-      if (sYear.values[i][0] === selYear && sMonth.values[i][0] === selMonth && sPerson.values[i][0] === PERSON){
-        const desc = sDesc.values[i][0] || '(no description)';
+      if (sYear.values[i][0] === selYear && sMonth.values[i][0] === selMonth){
+        const cat = sCat.values[i][0] || '(no category)';
         items.push({
           date: sDate.values[i][0],
-          desc,
+          desc: cat,
           amount: sAmount.values[i][0] || 0,
           notes: sNotes.values[i][0] || '',
-          group: categoryToGroup[desc] || "Uncategorized"
+          group: categoryGroups[cat] || "Uncategorized"
         });
       }
     }
