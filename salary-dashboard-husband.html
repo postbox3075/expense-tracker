@@ -3,27 +3,33 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Salary Split-Up — Family Expense Tracker</title>
+<title>Private Salary View</title>
 <script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3/lib/msal-browser.min.js"></script>
 <style>
   :root{
     --navy:#0F1F35; --panel:#182F4D; --panel2:#1E3A5F;
     --ink:#EAF1FB; --muted:#8CA3C2; --line:#25405F;
-    --green:#3DDC97; --green-dim:#1F7A54;
-    --amber:#F5B942; --red:#FF6B6B; --red-dim:#7A2A2A;
-    --blue:#5AA9E6; --gold:#E8C468; --husband:#5AA9E6; --wife:#E8A0C4;
+    --green:#3DDC97; --red:#FF6B6B; --red-dim:#7A2A2A;
+    --blue:#5AA9E6; --gold:#E8C468;
   }
   *{box-sizing:border-box;}
   body{margin:0; background:var(--navy); color:var(--ink); font-family:'Segoe UI', Arial, Helvetica, sans-serif; -webkit-font-smoothing:antialiased;}
-  .wrap{max-width:960px; margin:0 auto; padding:20px 16px 60px;}
+  .wrap{max-width:640px; margin:0 auto; padding:20px 16px 60px;}
+
+  /* --- Password gate --- */
+  #gate{position:fixed; inset:0; background:var(--navy); display:flex; align-items:center; justify-content:center; padding:20px; z-index:100;}
+  #gateCard{background:var(--panel); border-radius:16px; padding:32px 28px; max-width:340px; width:100%; text-align:center;}
+  #gateCard .lock{font-size:36px; margin-bottom:10px;}
+  #gateCard h2{margin:0 0 6px; font-size:18px;}
+  #gateCard p{margin:0 0 18px; font-size:13px; color:var(--muted);}
+  #gatePass{width:100%; padding:12px 14px; border-radius:10px; border:1px solid var(--line); background:var(--panel2); color:var(--ink); font-size:16px; text-align:center; margin-bottom:12px;}
+  #gateBtn{width:100%; padding:12px; border:none; border-radius:10px; background:var(--gold); color:#2A2100; font-weight:bold; font-size:14px; cursor:pointer;}
+  #gateErr{color:var(--red); font-size:12.5px; margin-top:10px; display:none;}
 
   header{display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px; margin-bottom:20px;}
   header .title{font-size:22px; font-weight:800; letter-spacing:-0.02em;}
   header .title span{color:var(--gold);}
   header .sub{color:var(--muted); font-size:13px; margin-top:2px;}
-  .navlinks{display:flex; gap:14px; margin-top:8px;}
-  .navlinks a{color:var(--gold); font-size:13px; font-weight:bold; text-decoration:none; border-bottom:1px solid transparent;}
-  .navlinks a:hover{border-bottom-color:var(--gold);}
   .userbox{font-size:12px; color:var(--muted); text-align:right;}
   .userbox button{background:none; border:none; color:var(--blue); text-decoration:underline; cursor:pointer; font-size:12px; padding:0;}
 
@@ -37,30 +43,18 @@
 
   #dash{display:none;}
 
-  .combo{display:grid; grid-template-columns:repeat(auto-fit, minmax(150px,1fr)); gap:12px; margin-bottom:24px;}
-  .combo .stat{background:var(--panel); border-radius:14px; padding:16px; border-left:4px solid var(--blue);}
-  .combo .stat .label{font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin-bottom:6px;}
-  .combo .stat .value{font-size:22px; font-weight:800;}
-
-  .people{display:grid; grid-template-columns:1fr 1fr; gap:16px;}
-  @media (max-width:700px){ .people{grid-template-columns:1fr;} }
-
-  .personcard{background:var(--panel); border-radius:16px; padding:20px; border-top:4px solid var(--blue);}
-  .personcard.wife{border-top-color:var(--wife);}
-  .personcard h2{margin:0 0 4px; font-size:17px;}
-  .personcard .sub{font-size:12px; color:var(--muted); margin-bottom:16px;}
-
-  .pstat{display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--line); font-size:14px;}
+  .pstat{display:flex; justify-content:space-between; padding:12px 0; border-bottom:1px solid var(--line); font-size:15px;}
   .pstat:last-of-type{border-bottom:none;}
   .pstat .l{color:var(--muted);}
   .pstat .v{font-weight:bold;}
   .pstat .v.pos{color:var(--green);}
   .pstat .v.neg{color:var(--red);}
+  .card{background:var(--panel); border-radius:16px; padding:20px; margin-bottom:16px;}
 
-  .barbg{height:8px; border-radius:5px; background:var(--line); overflow:hidden; margin:14px 0 18px;}
+  .barbg{height:8px; border-radius:5px; background:var(--line); overflow:hidden; margin:14px 0 6px;}
   .barfill{height:100%; border-radius:5px; transition:width .4s ease;}
 
-  .itemtitle{font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); margin-bottom:8px;}
+  .itemtitle{font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); margin:18px 0 10px;}
   .item{display:flex; gap:10px; padding:9px 0; border-bottom:1px solid var(--line); font-size:13px; align-items:baseline;}
   .item:last-child{border-bottom:none;}
   .item .idate{flex:0 0 70px; color:var(--muted); font-size:11.5px;}
@@ -69,17 +63,14 @@
   .item .iamt{flex:0 0 auto; font-weight:bold;}
   .empty{font-size:13px; color:var(--muted); padding:10px 0;}
 
-  .typerow{display:flex; flex-wrap:wrap; gap:6px; margin:12px 0 18px;}
-  .typepill{font-size:11px; font-weight:bold; padding:4px 10px; border-radius:20px; white-space:nowrap;}
-
   .group{border:1px solid var(--line); border-radius:10px; margin-bottom:8px; overflow:hidden;}
-  .grouphdr{display:flex; justify-content:space-between; align-items:center; gap:8px; padding:10px 12px; cursor:pointer; user-select:none; background:rgba(255,255,255,.02);}
+  .grouphdr{display:flex; justify-content:space-between; align-items:center; gap:8px; padding:12px 14px; cursor:pointer; user-select:none; background:rgba(255,255,255,.02);}
   .grouphdr:hover{background:rgba(255,255,255,.05);}
   .groupleft{display:flex; align-items:center; gap:8px; min-width:0;}
-  .groupname{font-size:13.5px; font-weight:bold;}
+  .groupname{font-size:14px; font-weight:bold;}
   .groupchevron{color:var(--muted); font-size:11px; flex:0 0 auto;}
   .groupamt{font-size:13.5px; font-weight:bold; white-space:nowrap;}
-  .groupitems{display:none; padding:2px 12px 8px;}
+  .groupitems{display:none; padding:2px 14px 10px;}
 
   #status{font-size:13px; margin-top:16px; padding:10px 14px; border-radius:10px; display:none;}
   #status.busy{display:block; background:var(--panel2); color:var(--blue);}
@@ -88,16 +79,24 @@
 </style>
 </head>
 <body>
+
+<div id="gate">
+  <div id="gateCard">
+    <div class="lock">🔒</div>
+    <h2>Private View</h2>
+    <p>This page isn't linked from anywhere else in the app.</p>
+    <input type="password" id="gatePass" placeholder="Password" autofocus />
+    <button id="gateBtn">Unlock</button>
+    <div id="gateErr">Wrong password — try again.</div>
+  </div>
+</div>
+
 <div class="wrap">
 
   <header>
     <div>
-      <div class="title">💵 Salary <span>Split-Up</span></div>
-      <div class="sub">What each of you received, and exactly what it went toward</div>
-      <div class="navlinks">
-        <a href="index.html">✏️ Entry Form</a>
-        <a href="dashboard.html">📊 Spend Dashboard</a>
-      </div>
+      <div class="title">🔒 Private <span>Salary View</span></div>
+      <div class="sub">Husband only — full breakdown, by group</div>
     </div>
     <div class="userbox" id="userbox" style="display:none;">
       <div id="userLabel"></div>
@@ -110,7 +109,7 @@
   </div>
 
   <div id="signedOutCard">
-    <div style="font-size:15px; color:var(--muted); margin-bottom:4px;">Sign in to view the salary split-up</div>
+    <div style="font-size:15px; color:var(--muted); margin-bottom:4px;">Sign in to view</div>
     <button id="loginBtn">Sign in with Microsoft</button>
   </div>
 
@@ -121,35 +120,16 @@
       <button class="refreshBtn" id="refreshBtn">↻ Refresh</button>
     </div>
 
-    <div class="combo">
-      <div class="stat"><div class="label">Total Received</div><div class="value" id="cReceived">—</div></div>
-      <div class="stat"><div class="label">Total Spent</div><div class="value" id="cSpent">—</div></div>
-      <div class="stat"><div class="label">Combined Remaining</div><div class="value" id="cRemain">—</div></div>
+    <div class="card">
+      <div class="sub" id="monthLabel">—</div>
+      <div class="pstat"><span class="l">Received</span><span class="v" id="received">Rs 0</span></div>
+      <div class="pstat"><span class="l">Spent</span><span class="v" id="spent">Rs 0</span></div>
+      <div class="pstat"><span class="l">Remaining</span><span class="v" id="remain">Rs 0</span></div>
+      <div class="barbg"><div class="barfill" id="bar" style="width:0%; background:var(--blue);"></div></div>
     </div>
 
-    <div class="people">
-      <div class="personcard husband">
-        <h2>Husband</h2>
-        <div class="sub" id="hMonthLabel">—</div>
-        <div class="pstat"><span class="l">Received</span><span class="v" id="hReceived">Rs 0</span></div>
-        <div class="pstat"><span class="l">Spent</span><span class="v" id="hSpent">Rs 0</span></div>
-        <div class="pstat"><span class="l">Remaining</span><span class="v" id="hRemain">Rs 0</span></div>
-        <div class="barbg"><div class="barfill" id="hBar" style="width:0%; background:var(--husband);"></div></div>
-        <div class="itemtitle">By group — tap to expand</div>
-        <div id="hItems"></div>
-      </div>
-
-      <div class="personcard wife">
-        <h2>Wife</h2>
-        <div class="sub" id="wMonthLabel">—</div>
-        <div class="pstat"><span class="l">Received</span><span class="v" id="wReceived">Rs 0</span></div>
-        <div class="pstat"><span class="l">Spent</span><span class="v" id="wSpent">Rs 0</span></div>
-        <div class="pstat"><span class="l">Remaining</span><span class="v" id="wRemain">Rs 0</span></div>
-        <div class="barbg"><div class="barfill" id="wBar" style="width:0%; background:var(--wife);"></div></div>
-        <div class="itemtitle">By group — tap to expand</div>
-        <div id="wItems"></div>
-      </div>
-    </div>
+    <div class="itemtitle">By group — tap to expand</div>
+    <div id="items"></div>
 
     <div id="status"></div>
   </div>
@@ -158,8 +138,9 @@
 
 <script>
 /* =====================================================================
-   CONFIGURE, THEN COMMIT — same values as index.html / dashboard.html
+   CONFIGURE, THEN COMMIT
    ===================================================================== */
+const PAGE_PASSWORD = "CHANGE-THIS-PASSWORD"; // <-- set your own password here before deploying
 const CLIENT_ID = "66b07780-e164-4438-a80f-224ff11391fc";
 const FILE_PATH = "/Family_Expense_Tracker_v15_Fixed.xlsm";
 const SALARY_RECEIVED_SHEET = "Salary Received Log";
@@ -172,10 +153,11 @@ const GROUP_COLORS = {
   "Suganya": "#5AA9E6", "Mom": "#F5B942", "Murali": "#3DDC97",
   "SG Expenses": "#E8A0C4", "Uncategorized": "#8CA3C2"
 };
+const PERSON = "Husband"; // this page only ever shows this person's data
 /* ===================================================================== */
 
 // Hardcoded on purpose — see index.html for why (avoids URL-variant mismatches with Azure).
-const REDIRECT_URI = "https://postbox3075.github.io/expense-tracker/salary-dashboard.html";
+const REDIRECT_URI = "https://postbox3075.github.io/expense-tracker/salary-dashboard-husband.html";
 const msalConfig = {
   auth: { clientId: CLIENT_ID, authority: "https://login.microsoftonline.com/consumers", redirectUri: REDIRECT_URI },
   cache: { cacheLocation: "localStorage" }
@@ -198,6 +180,21 @@ function serialToDisplayDate(serial){
   const epoch = Date.UTC(1899, 11, 30);
   const d = new Date(epoch + serial * 86400000);
   return `${String(d.getUTCDate()).padStart(2,'0')}-${DMONTHS[d.getUTCMonth()]}`;
+}
+
+/* ---------- Password gate ---------- */
+document.getElementById('gateBtn').addEventListener('click', tryUnlock);
+document.getElementById('gatePass').addEventListener('keydown', (e) => { if (e.key === 'Enter') tryUnlock(); });
+function tryUnlock(){
+  const entered = document.getElementById('gatePass').value;
+  if (entered === PAGE_PASSWORD){
+    document.getElementById('gate').style.display = 'none';
+    init();
+  } else {
+    document.getElementById('gateErr').style.display = 'block';
+    document.getElementById('gatePass').value = '';
+    document.getElementById('gatePass').focus();
+  }
 }
 
 async function init(){
@@ -281,7 +278,7 @@ async function loadData(){
     const selMonth = MONTH_NAMES[selMonthIdx];
     const selYear = parseInt(document.getElementById('yearSel').value, 10);
 
-    const [rDate, rMonth, rYear, rPerson, rAmount, rNotes,
+    const [rDate, rMonth, rYear, rPerson, rAmount,
            sDate, sMonth, sYear, sPerson, sDesc, sAmount, sNotes,
            catNames, catGroups] = await Promise.all([
       graphFetch(wsRange(SALARY_RECEIVED_SHEET, `A${SAL_RECV_FIRST}:A${SAL_RECV_LAST}`)),
@@ -289,7 +286,6 @@ async function loadData(){
       graphFetch(wsRange(SALARY_RECEIVED_SHEET, `C${SAL_RECV_FIRST}:C${SAL_RECV_LAST}`)),
       graphFetch(wsRange(SALARY_RECEIVED_SHEET, `D${SAL_RECV_FIRST}:D${SAL_RECV_LAST}`)),
       graphFetch(wsRange(SALARY_RECEIVED_SHEET, `E${SAL_RECV_FIRST}:E${SAL_RECV_LAST}`)),
-      graphFetch(wsRange(SALARY_RECEIVED_SHEET, `F${SAL_RECV_FIRST}:F${SAL_RECV_LAST}`)),
       graphFetch(wsRange(SALARY_SPEND_SHEET, `A${SAL_SPEND_FIRST}:A${SAL_SPEND_LAST}`)),
       graphFetch(wsRange(SALARY_SPEND_SHEET, `B${SAL_SPEND_FIRST}:B${SAL_SPEND_LAST}`)),
       graphFetch(wsRange(SALARY_SPEND_SHEET, `C${SAL_SPEND_FIRST}:C${SAL_SPEND_LAST}`)),
@@ -307,32 +303,27 @@ async function loadData(){
       if (n) categoryToGroup[n] = catGroups.values[i][0] || "Uncategorized";
     }
 
-    const received = { Husband: 0, Wife: 0 };
+    let received = 0;
     for (let i = 0; i < rYear.values.length; i++){
-      if (rYear.values[i][0] === selYear && rMonth.values[i][0] === selMonth){
-        const p = rPerson.values[i][0];
-        if (p === "Husband" || p === "Wife") received[p] += rAmount.values[i][0] || 0;
+      if (rYear.values[i][0] === selYear && rMonth.values[i][0] === selMonth && rPerson.values[i][0] === PERSON){
+        received += rAmount.values[i][0] || 0;
       }
     }
 
-    const items = { Husband: [], Wife: [] };
+    const items = [];
     for (let i = 0; i < sYear.values.length; i++){
-      if (sYear.values[i][0] === selYear && sMonth.values[i][0] === selMonth){
-        const p = sPerson.values[i][0];
-        if (p === "Husband" || p === "Wife"){
-          const desc = sDesc.values[i][0] || '(no description)';
-          items[p].push({
-            date: sDate.values[i][0],
-            desc,
-            amount: sAmount.values[i][0] || 0,
-            notes: sNotes.values[i][0] || '',
-            group: categoryToGroup[desc] || "Uncategorized"
-          });
-        }
+      if (sYear.values[i][0] === selYear && sMonth.values[i][0] === selMonth && sPerson.values[i][0] === PERSON){
+        const desc = sDesc.values[i][0] || '(no description)';
+        items.push({
+          date: sDate.values[i][0],
+          desc,
+          amount: sAmount.values[i][0] || 0,
+          notes: sNotes.values[i][0] || '',
+          group: categoryToGroup[desc] || "Uncategorized"
+        });
       }
     }
-    items.Husband.sort((a,b) => (a.date||0) - (b.date||0));
-    items.Wife.sort((a,b) => (a.date||0) - (b.date||0));
+    items.sort((a,b) => (a.date||0) - (b.date||0));
 
     render(selMonth, selYear, received, items);
     showStatus("", "");
@@ -343,25 +334,24 @@ async function loadData(){
   }
 }
 
-function renderPerson(prefix, monthName, year, receivedAmt, itemList){
+function render(monthName, year, receivedAmt, itemList){
   const spent = itemList.reduce((s,i) => s + i.amount, 0);
   const remain = receivedAmt - spent;
-  document.getElementById(prefix + 'MonthLabel').textContent = monthName + " " + year;
-  document.getElementById(prefix + 'Received').textContent = inr(receivedAmt);
-  document.getElementById(prefix + 'Spent').textContent = inr(spent);
-  const remainEl = document.getElementById(prefix + 'Remain');
+  document.getElementById('monthLabel').textContent = monthName + " " + year;
+  document.getElementById('received').textContent = inr(receivedAmt);
+  document.getElementById('spent').textContent = inr(spent);
+  const remainEl = document.getElementById('remain');
   remainEl.textContent = inr(remain);
   remainEl.className = 'v ' + (remain >= 0 ? 'pos' : 'neg');
   const pct = receivedAmt > 0 ? Math.min(spent / receivedAmt, 1) * 100 : (spent > 0 ? 100 : 0);
-  document.getElementById(prefix + 'Bar').style.width = pct + '%';
+  document.getElementById('bar').style.width = pct + '%';
 
-  const wrap = document.getElementById(prefix + 'Items');
+  const wrap = document.getElementById('items');
   if (itemList.length === 0){
     wrap.innerHTML = `<div class="empty">Nothing logged for ${monthName} ${year} yet.</div>`;
     return;
   }
 
-  // Group items by category-group
   const byGroup = {};
   itemList.forEach(it => {
     if (!byGroup[it.group]) byGroup[it.group] = [];
@@ -382,14 +372,14 @@ function renderPerson(prefix, monthName, year, receivedAmt, itemList){
       </div>`).join('');
     return `
       <div class="group">
-        <div class="grouphdr" data-target="${prefix}-g${idx}">
+        <div class="grouphdr" data-target="g${idx}">
           <div class="groupleft">
             <span class="groupchevron">▸</span>
             <span class="groupname" style="color:${color};">${g}</span>
           </div>
           <span class="groupamt">${inr(groupTotal)}</span>
         </div>
-        <div class="groupitems" id="${prefix}-g${idx}">${itemsHtml}</div>
+        <div class="groupitems" id="g${idx}">${itemsHtml}</div>
       </div>`;
   }).join('');
 
@@ -403,19 +393,6 @@ function renderPerson(prefix, monthName, year, receivedAmt, itemList){
     });
   });
 }
-
-function render(monthName, year, received, items){
-  const totalReceived = received.Husband + received.Wife;
-  const totalSpent = items.Husband.reduce((s,i)=>s+i.amount,0) + items.Wife.reduce((s,i)=>s+i.amount,0);
-  document.getElementById('cReceived').textContent = inr(totalReceived);
-  document.getElementById('cSpent').textContent = inr(totalSpent);
-  document.getElementById('cRemain').textContent = inr(totalReceived - totalSpent);
-
-  renderPerson('h', monthName, year, received.Husband, items.Husband);
-  renderPerson('w', monthName, year, received.Wife, items.Wife);
-}
-
-init();
 </script>
 </body>
 </html>
